@@ -56,6 +56,7 @@ public sealed record PersonAssignment(
 public sealed record AttendanceStatusDefinition(
     StatusId StatusId,
     string VisibleName,
+    string NormalizedName,
     string ShortSymbol,
     string ChosenColorHex,
     bool IsSystemSeeded,
@@ -138,6 +139,28 @@ public sealed record UserAccount(
     DateTimeOffset CreatedAtUtc,
     long RowVersion);
 
+public sealed record UserRoleHistory(
+    long HistoryId,
+    UserId UserId,
+    UserRole? OldRole,
+    UserRole NewRole,
+    UserId ChangedByUserId,
+    DateTimeOffset ChangedAtUtc);
+
+public sealed record UserSession(
+    string SessionNonce,
+    UserId UserId,
+    UserRole Role,
+    DateTimeOffset IssuedAtUtc,
+    DateTimeOffset ExpiresAtUtc,
+    bool RevokedFlag);
+
+public sealed record FailedLoginEvent(
+    long FailedEventId,
+    string UsernameAttempted,
+    DateTimeOffset AttemptedAtUtc,
+    string FailureReason);
+
 public sealed record AuditEvent(
     AuditEventId AuditEventId,
     string OperationCode,
@@ -202,6 +225,29 @@ public sealed record CustomFieldDefinition(
     bool ActiveFlag,
     DateTimeOffset CreatedAtUtc);
 
+public sealed record CustomFieldValue(
+    PersonId PersonId,
+    FieldDefinitionId FieldDefinitionId,
+    string? FieldValueText,
+    DateTimeOffset UpdatedAtUtc);
+
+public sealed record PeriodClosure(
+    string PeriodKey,
+    string PeriodType,
+    bool IsClosed,
+    DateTimeOffset ClosedAtUtc,
+    string ClosedByActor,
+    string PolicyVersion);
+
+public sealed record AttendanceDraft(
+    string DraftId,
+    DateOnly BusinessDate,
+    SiteId? SiteId,
+    StatusId TargetStatusId,
+    string SelectedPersonIdsJson,
+    UserId CreatedByUserId,
+    DateTimeOffset UpdatedAtUtc);
+
 public sealed record AutoAttendanceRun(
     string JobKey,
     DateOnly BusinessDate,
@@ -225,3 +271,36 @@ public sealed record BackupRecord(
     UserId CreatedBy,
     DateTimeOffset CreatedAtUtc,
     string NotesArabic);
+
+public sealed record ImportBatch(
+    ImportBatchId ImportBatchId,
+    string SourceFileName,
+    string SourceFileSha256,
+    int TotalRows,
+    int AcceptedRows,
+    int RejectedRows,
+    int CreatedSitesCount,
+    string Status,
+    UserId CreatedByUserId,
+    DateTimeOffset CreatedAtUtc,
+    DateTimeOffset? CommittedAtUtc);
+
+public sealed record ImportIssue(
+    long IssueId,
+    ImportBatchId ImportBatchId,
+    string WorksheetName,
+    int RowNumber,
+    string? RawServiceNumberA,
+    string? RawPersonName,
+    string? RawSiteName,
+    string IssueReasonArabic);
+
+public sealed record AppSetting(
+    string SettingKey,
+    string SettingValue,
+    DateTimeOffset UpdatedAtUtc);
+
+public sealed record SchemaVersionRecord(
+    int SchemaVersion,
+    string MigrationName,
+    DateTimeOffset AppliedAtUtc);
