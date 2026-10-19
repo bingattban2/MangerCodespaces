@@ -1,0 +1,37 @@
+# Place this workflow ONLY in a separate verification repository, never the app repository.
+name: AlTamam Phase 00 Step 01 External Windows Verification
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout independent verification harness
+        uses: actions/checkout@v4
+        with:
+          path: verifier
+      - name: Checkout pinned production source as read-only reference
+        uses: actions/checkout@v4
+        with:
+          repository: bingattban2/MangerCodespaces
+          ref: 200397747641b9553a733d9ba432a2d5b75f8ded
+          persist-credentials: false
+          path: source
+      - name: Install .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Execute external-only verification
+        shell: pwsh
+        run: |
+          & ./verifier/run_windows.ps1 -RepositoryRoot "${{ github.workspace }}/source" -ResultsDirectory "${{ github.workspace }}/evidence" -ExpectedCommit '200397747641b9553a733d9ba432a2d5b75f8ded'
+      - name: Upload verification evidence (even on failure)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase00-step01-windows-evidence
+          path: evidence/
+          if-no-files-found: warn

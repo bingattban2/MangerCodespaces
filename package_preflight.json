@@ -1,0 +1,51 @@
+{
+  "scope": "external-workspace packaging checks only; NOT Windows build/C# execution",
+  "utc": "2026-10-19T17:58:37.797136+00:00",
+  "passed": 10,
+  "total": 10,
+  "checks": [
+    {
+      "check": "Pinned known GitHub commit",
+      "status": "PASS"
+    },
+    {
+      "check": "GitHub checkout path separated",
+      "status": "PASS"
+    },
+    {
+      "check": "Verification checkout separate",
+      "status": "PASS"
+    },
+    {
+      "check": "Windows runner configured",
+      "status": "PASS"
+    },
+    {
+      "check": "GitHub manual trigger only",
+      "status": "PASS"
+    },
+    {
+      "check": "Read-only permissions",
+      "status": "PASS"
+    },
+    {
+      "check": "Evidence upload including failure",
+      "status": "PASS"
+    },
+    {
+      "check": "No known default credential embedded in current source",
+      "status": "PASS"
+    },
+    {
+      "check": "Runner emits JSON file outside production",
+      "status": "PASS"
+    },
+    {
+      "check": "Source tree unchanged",
+      "status": "PASS"
+    }
+  ],
+  "CSharpWindowsRuntime": "NOT RUN",
+  "SourceEdited": false,
+  "ProductionStepAcceptance": "BLOCKED"
+}
