@@ -73,12 +73,7 @@ public sealed class SourceBaselineInventoryService
                 SizeBytes: bytes.Length,
                 Category: category));
 
-            var fileNameLower = Path.GetFileName(relPath).ToLowerInvariant();
-            if (fileNameLower.Contains("inventory") ||
-                fileNameLower.Contains("progress") ||
-                fileNameLower.EndsWith(".log", StringComparison.Ordinal) ||
-                fileNameLower.EndsWith(".db", StringComparison.Ordinal) ||
-                fileNameLower.EndsWith(".sqlite", StringComparison.Ordinal))
+            if (IsDisallowedRepositoryArtifact(relPath))
             {
                 hasObsoleteDemos = true;
                 violations.Add($"ملف غير مسموح به داخل مستودع الإنتاج: {relPath}");
@@ -91,8 +86,8 @@ public sealed class SourceBaselineInventoryService
             else if (relPath.EndsWith(".sql", StringComparison.OrdinalIgnoreCase))
             {
                 var sqlText = File.ReadAllText(filePath);
-                if (Regex.IsMatch(sqlText, @"INSERT\s+(OR\s+\w+\s+)?INTO\s+Users", RegexOptions.IgnoreCase) ||
-                    Regex.IsMatch(sqlText, @"INSERT\s+(OR\s+\w+\s+)?INTO\s+Persons", RegexOptions.IgnoreCase))
+                if (Regex.IsMatch(sqlText, @"\bINSERT\s+(OR\s+\w+\s+)?INTO\s+(?:""|`|\[)?Users(?:""|`|\])?(?![A-Za-z0-9_])", RegexOptions.IgnoreCase) ||
+                    Regex.IsMatch(sqlText, @"\bINSERT\s+(OR\s+\w+\s+)?INTO\s+(?:""|`|\[)?Persons(?:""|`|\])?(?![A-Za-z0-9_])", RegexOptions.IgnoreCase))
                 {
                     hasHiddenAccounts = true;
                     violations.Add($"تم رصد حسابات أو أفراد مضمنين مسبقاً في ملف SQL: {relPath}");
@@ -217,6 +212,38 @@ public sealed class SourceBaselineInventoryService
                 IsPersistedInDatabase = true,
                 PersistedAuditEventId = auditResult.Value.AuditEventId.Value
             });
+    }
+
+    /// <summary>
+    /// Reject generated verification output and database/log artifacts, not implementation
+    /// types such as SourceBaselineInventoryService.cs that happen to contain "Inventory".
+    /// </summary>
+    private static bool IsDisallowedRepositoryArtifact(string relativePath)
+    {
+        var relativeLower = relativePath.Replace('\\', '/').ToLowerInvariant();
+        var fileName = Path.GetFileName(relativeLower);
+        var extension = Path.GetExtension(fileName);
+
+        if (relativeLower.StartsWith("tests/", StringComparison.Ordinal) ||
+            relativeLower.StartsWith("csharprunner/", StringComparison.Ordinal) ||
+            relativeLower.Contains("/__tests__/", StringComparison.Ordinal) ||
+            relativeLower.Contains("/fixtures/", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (extension is ".log" or ".db" or ".sqlite" or ".sqlite3" or ".db3")
+        {
+            return true;
+        }
+
+        bool isGeneratedEvidenceFormat = extension is ".json" or ".csv" or ".txt" or ".md" or ".xml";
+        return isGeneratedEvidenceFormat &&
+            (fileName.Contains("inventory", StringComparison.Ordinal) ||
+             fileName.Contains("progress", StringComparison.Ordinal) ||
+             fileName.Contains("verification", StringComparison.Ordinal) ||
+             fileName.Contains("evidence", StringComparison.Ordinal) ||
+             fileName.Contains("test_results", StringComparison.Ordinal));
     }
 
     private static bool IsIgnoredBuildDirectory(string rootFull, string filePath)
