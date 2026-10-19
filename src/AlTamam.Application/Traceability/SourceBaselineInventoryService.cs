@@ -57,12 +57,12 @@ public sealed class SourceBaselineInventoryService
 
         var allFiles = Directory.EnumerateFiles(rootFull, "*", SearchOption.AllDirectories)
             .Where(p => !IsIgnoredBuildDirectory(rootFull, p))
-            .OrderBy(p => Path.GetRelativePath(rootFull, p).Replace('\', '/'), StringComparer.Ordinal)
+            .OrderBy(p => Path.GetRelativePath(rootFull, p).Replace('\\', '/'), StringComparer.Ordinal)
             .ToArray();
 
         foreach (var filePath in allFiles)
         {
-            var relPath = Path.GetRelativePath(rootFull, filePath).Replace('\', '/');
+            var relPath = Path.GetRelativePath(rootFull, filePath).Replace('\\', '/');
             var bytes = File.ReadAllBytes(filePath);
             var sha256Hex = Convert.ToHexString(SHA256.HashData(bytes));
             var category = ClassifyFile(relPath);
@@ -221,7 +221,7 @@ public sealed class SourceBaselineInventoryService
 
     private static bool IsIgnoredBuildDirectory(string rootFull, string filePath)
     {
-        var rel = Path.GetRelativePath(rootFull, filePath).Replace('\', '/');
+        var rel = Path.GetRelativePath(rootFull, filePath).Replace('\\', '/');
         return rel.StartsWith(".git/", StringComparison.OrdinalIgnoreCase)
             || rel.Contains("/bin/", StringComparison.OrdinalIgnoreCase)
             || rel.Contains("/obj/", StringComparison.OrdinalIgnoreCase);
@@ -272,11 +272,11 @@ public sealed class SourceBaselineInventoryService
                     continue;
                 }
 
-                var targetFull = Path.GetFullPath(Path.Combine(csprojDir, includeAttr.Replace('\', Path.DirectorySeparatorChar)));
+                var targetFull = Path.GetFullPath(Path.Combine(csprojDir, includeAttr.Replace('\\', Path.DirectorySeparatorChar)));
                 bool exists = File.Exists(targetFull);
                 var targetRel = exists
-                    ? Path.GetRelativePath(rootFull, targetFull).Replace('\', '/')
-                    : includeAttr.Replace('\', '/');
+                    ? Path.GetRelativePath(rootFull, targetFull).Replace('\\', '/')
+                    : includeAttr.Replace('\\', '/');
 
                 projectReferences.Add(new ProjectReferenceAuditDto(
                     SourceProjectRelativePath: csprojRelPath,
