@@ -43,21 +43,21 @@ public sealed class PolicyConflictResolutionService
             ConflictId: "POL-CONFLICT-01-FULL-RESET",
             Topic: PolicyConflictTopic.FullReset,
             TitleArabic: "حذف جميع بيانات البرنامج (Full Application Data Reset)",
-            SourcePositionAArabic: "الموقف الأول (النص الأولي العام): إتاحة أوامر الإعدادات الإدارية لفئات الإدارة أو تنفيذ الحذف الشامل مباشرة بعد رسالة تأكيد بسيطة دون بوابة نسخ احتياطي إلزامية.",
-            SourcePositionBArabic: "الموقف الثاني (القرار الأمني المعتمد): حصر تنفيذ «حذف جميع بيانات البرنامج» بدور «الإدارة العامة» (GeneralAdministration) حصرياً ومنع الإدارة العادية والمشرف، مع فرض بوابة نجاح نسخة احتياطية موثقة قبل السماح بالتصفير (ResetBackupGateFailed).",
+            SourcePositionAArabic: "الموقف السابق الملغى (محفوظ للتدقيق التاريخي فقط): السماح بالحذف دون تحقق إضافي أو فرض إنشاء نسخة احتياطية موثقة قبل الحذف؛ لا يُطبّق أيّ من هذين البديلين بوصفه القاعدة الحالية.",
+            SourcePositionBArabic: "قرار المالك النهائي: حصر حذف جميع بيانات البرنامج ونسخه الاحتياطية المُدارة ضمن مسارات البرنامج المعتمدة بدور الإدارة العامة (GeneralAdministration) فقط، بعد تحذير واضح يبين نطاق الحذف، وإعادة التحقق من كلمة مرور الحساب الحالي والتأكيد الصريح؛ لا يُشترط إنشاء نسخة احتياطية قبل الحذف؛ يشمل التصفير الشامل حذف سجل العمليات الأصلي AuditEvents وطبقة تعديل العرض AuditLogPresentationEdits وجميع سجلات التاريخ المرتبطة بالبرنامج. تُستثنى الملفات والنسخ الموجودة خارج المسارات المخصصة للبرنامج.",
             ApprovalState: PolicyConflictApprovalState.ApprovedPositionBEnhanced,
-            ApprovedResolutionRuleArabic: "يُسمح فقط لـ GeneralAdministration بمعاينة واعتماد حذف جميع بيانات البرنامج (PreviewFullReset / CommitFullReset) بشرط اجتياز بوابة النسخة الاحتياطية الموثقة، مع رفض أي دور آخر بكود Unauthorized.",
-            ApprovedByOwnerLabel: "قرار المالك المعتمد — مصفوفة الصلاحيات وحماية البيانات",
+            ApprovedResolutionRuleArabic: "يُسمح لـ GeneralAdministration فقط بطلب حذف بيانات البرنامج وجميع النسخ الاحتياطية التي يديرها ضمن مساراته المعتمدة؛ ويشمل التصفير الشامل حصرياً إزالة AuditEvents وAuditLogPresentationEdits وكل سجلات الهوية والتحضير والتنقلات والأرشيف التاريخية، دون الاحتفاظ باستثناء لسجلات التدقيق. يرفض CommitFullReset ما لم يعرض تحذيراً يذكر حذف التاريخ وسجل العمليات والنسخ الاحتياطية، ويُقرّه المستخدم وتُتحقَّق كلمة المرور الحالية من مصدر موثوق في C# ويؤكد المستخدم الحذف صراحة. النسخ الاحتياطي قبل الحذف اختياري وليس بوابة له. لا يحذف البرنامج ملفات أو نسخاً احتياطية خارج جذوره المخصصة، ويجب رفض أي مسار متجاوز أو رابط يعيد توجيه الحذف إلى خارجها. يُرفض كل دور آخر بكود Unauthorized.",
+            ApprovedByOwnerLabel: "قرار المالك النهائي — 2026-10-19: إدارة عامة + تحذير + تحقق كلمة المرور + تأكيد دون نسخة احتياطية إلزامية",
             EnforcingCodeArtifacts: new[]
             {
                 "AlTamam.Domain.Policies.RoleAuthorizationPolicy.CanExecuteFullDatabaseReset",
                 "AlTamam.Application.Rules.PolicyConflictResolutionService.EvaluateFullResetGate",
-                "AlTamam.Contracts.Bridge.BridgeErrorCodes.ResetBackupGateFailed"
+                "AlTamam.Contracts.Bridge.BridgeErrorCodes.ResetConfirmationRequired"
             },
             GoverningErrorCodes: new[]
             {
                 BridgeErrorCodes.Unauthorized,
-                BridgeErrorCodes.ResetBackupGateFailed,
+                BridgeErrorCodes.ResetConfirmationRequired,
                 BridgeErrorCodes.StorageBusy
             },
             AffectedBridgeActions: new[] { "PreviewFullReset", "CommitFullReset" },
@@ -104,9 +104,9 @@ public sealed class PolicyConflictResolutionService
             Topic: PolicyConflictTopic.AuditOverlayEditing,
             TitleArabic: "تعديل وحذف قيود سجل العمليات وعرض القيود المعدلة والمحذوفة (Audit Log Overlay Editing)",
             SourcePositionAArabic: "الموقف الأول (تعارض بين السجل غير القابل للمسح أو حصر التعديل بالمدير العام فقط أو المسح الفيزيائي المباشر): إما منع تعديل سجل العمليات مطلقاً، أو حصره بالإدارة العامة وحدها، أو تعديل/حذف الصف الأصلي في جدول AuditEvents مباشرة.",
-            SourcePositionBArabic: "الموقف الثاني (تعديل المالك الصريح وبنية الطبقة الفوقية): السماح لكل من «الإدارة العامة» و«الإدارة العادية» معاً بتعديل وحذف القيود الظاهرة في «سجل العمليات» والاطلاع على «سجل القيود المعدلة والمحذوفة»، ومنع «مشرف» كلياً، مع إبقاء جدول AuditEvents غير قابل للمسح وتنفيذ التعديل/الحذف عبر طبقة AuditLogPresentationEdits وعرض المنفذ بصيغة [اسم المستخدم] - [الاسم الكامل بحسب الكشف].",
+            SourcePositionBArabic: "الموقف الثاني (تعديل المالك الصريح وبنية الطبقة الفوقية): السماح لكل من «الإدارة العامة» و«الإدارة العادية» معاً بتعديل وحذف القيود الظاهرة في «سجل العمليات» والاطلاع على «سجل القيود المعدلة والمحذوفة»، ومنع «مشرف» كلياً، مع إبقاء جدول AuditEvents غير قابل للتعديل أو الحذف الفيزيائي أثناء الاستخدام المعتاد وتنفيذ التعديل/الحذف الظاهري عبر AuditLogPresentationEdits وعرض المنفذ بصيغة [اسم المستخدم] - [الاسم الكامل بحسب الكشف]. الاستثناء الوحيد هو التصفير الشامل المعتمد، الذي يمحو السجل الأصلي وطبقة العرض وجميع البيانات التاريخية التابعة للبرنامج.",
             ApprovalState: PolicyConflictApprovalState.ApprovedPositionBEnhanced,
-            ApprovedResolutionRuleArabic: "يُسمح لـ GeneralAdministration وOrdinaryAdministration بتعديل وحذف العرض الظاهري لسجل العمليات عبر AuditLogPresentationEdits ومراجعة ModifiedDeletedAuditEntries، ويُمنع Supervisor بكود Unauthorized، مع بقاء AuditEvents محمياً بسلسلة التجزئة SHA-256.",
+            ApprovedResolutionRuleArabic: "أثناء الاستخدام المعتاد يُسمح لـ GeneralAdministration وOrdinaryAdministration بتعديل وحذف العرض الظاهري لسجل العمليات عبر AuditLogPresentationEdits ومراجعة ModifiedDeletedAuditEntries، ويُمنع Supervisor بكود Unauthorized، ولا يجوز حذف أو تعديل AuditEvents الأصلي المرتبط بسلسلة تجزئة SHA-256. عند التصفير الشامل وحده، وبعد اجتياز بوابة حذف البيانات للإدارة العامة، تُزال قاعدة بيانات البرنامج بما فيها AuditEvents وAuditLogPresentationEdits وكل السجلات التاريخية، دون استثناء دائم لسجل العمليات.",
             ApprovedByOwnerLabel: "تعديل المالك الصريح — صلاحيات سجل العمليات والطبقة الفوقية",
             EnforcingCodeArtifacts: new[]
             {
@@ -249,7 +249,25 @@ public sealed class PolicyConflictResolutionService
         return ServiceResult<PolicyConflictRegistryReportDto>.Ok(report);
     }
 
-    public static ServiceResult<bool> EvaluateFullResetGate(UserRole actorRole, bool hasVerifiedRecentBackup)
+    /// <summary>
+    /// Validates the owner-approved full-reset prerequisites. The caller MUST obtain
+    /// currentPasswordVerified from server-side C# password reauthentication of the
+    /// signed-in GeneralAdministration account; never trust a value supplied by WebView2.
+    /// This check alone does not delete data or authenticate a password.
+    /// Backup creation is independent and is not a prerequisite for full reset.
+    /// Reset scope: all application data (including raw AuditEvents, presentation edits,
+    /// and all personnel/attendance/movement/archive histories) plus app-managed backups
+    /// inside explicitly approved application-owned roots only. AuditEvents remain
+    /// append-only during NORMAL usage; full reset is the sole deletion exception.
+    /// This gate does not perform filesystem deletion.
+    /// A future executor must reject traversal/reparse/symlink escapes, unexpected roots,
+    /// and any external backup copies; never use a path supplied untrusted by the UI.
+    /// </summary>
+    public static ServiceResult<bool> EvaluateFullResetGate(
+        UserRole actorRole,
+        bool warningAcknowledged,
+        bool currentPasswordVerified,
+        bool explicitConfirmation)
     {
         if (!RoleAuthorizationPolicy.CanExecuteFullDatabaseReset(actorRole))
         {
@@ -258,11 +276,25 @@ public sealed class PolicyConflictResolutionService
                 "عملية حذف جميع بيانات البرنامج محصورة بالإدارة العامة فقط.");
         }
 
-        if (!hasVerifiedRecentBackup)
+        if (!warningAcknowledged)
         {
             return ServiceResult<bool>.Fail(
-                BridgeErrorCodes.ResetBackupGateFailed,
-                "لا يمكن حذف جميع بيانات البرنامج قبل إنشاء نسخة احتياطية موثقة والتحقق من سلامتها.");
+                BridgeErrorCodes.ResetConfirmationRequired,
+                "يجب عرض تحذير حذف جميع بيانات البرنامج والحصول على إقرار المستخدم قبل المتابعة.");
+        }
+
+        if (!currentPasswordVerified)
+        {
+            return ServiceResult<bool>.Fail(
+                BridgeErrorCodes.Unauthorized,
+                "يجب إعادة التحقق من كلمة مرور حساب الإدارة العامة الحالي قبل الحذف.");
+        }
+
+        if (!explicitConfirmation)
+        {
+            return ServiceResult<bool>.Fail(
+                BridgeErrorCodes.ResetConfirmationRequired,
+                "لم يتم تأكيد الحذف صراحة؛ لم تُحذف أي بيانات.");
         }
 
         return ServiceResult<bool>.Ok(true);

@@ -39,7 +39,7 @@
     "MissingEVolume",
     "InsufficientDiskSpace",
     "ScheduleUnavailable",
-    "ResetBackupGateFailed",
+    "ResetConfirmationRequired",
     "StorageBusy",
     "ClockRollbackSuspected"
   ],
@@ -2181,8 +2181,7 @@
       "isMutating": false,
       "idempotentByRequestId": false,
       "errorCodes": [
-        "Unauthorized",
-        "ResetBackupGateFailed"
+        "Unauthorized"
       ],
       "requestSchema": {
         "type": "object",
@@ -2205,7 +2204,7 @@
       "idempotentByRequestId": true,
       "errorCodes": [
         "Unauthorized",
-        "ResetBackupGateFailed",
+        "ResetConfirmationRequired",
         "StorageBusy"
       ],
       "requestSchema": {

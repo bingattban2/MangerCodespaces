@@ -673,7 +673,7 @@ public sealed class RequirementTraceabilityService
         new CanonicalRequirementTraceDto(
             RequirementId: "REQ-11-USERS-AND-AUDIT-OVERLAY",
             SourcePassageArabic: "شاشة الإدارة > المستخدمين وسجل العمليات.",
-            ApprovedDecisionArabic: "ربط الحسابات الجديدة بأفراد الكشف؛ عرض المنفذ بصيغة [اسم المستخدم] - [الاسم الكامل بحسب الكشف]؛ السماح لكل من الإدارة العامة والإدارة العادية بتعديل وحذف القيود الظاهرة في سجل العمليات ومراجعة سجل القيود المعدلة والمحذوفة، ومنع المشرف كلياً.",
+            ApprovedDecisionArabic: "ربط الحسابات الجديدة بأفراد الكشف؛ عرض المنفذ بصيغة [اسم المستخدم] - [الاسم الكامل بحسب الكشف]؛ السماح لكل من الإدارة العامة والإدارة العادية بتعديل وحذف القيود الظاهرة في سجل العمليات ومراجعة سجل القيود المعدلة والمحذوفة، ومنع المشرف كلياً؛ أثناء الاستخدام المعتاد لا يُحذف AuditEvents الخام، والاستثناء الوحيد هو التصفير الشامل المعتمد الذي يمحو السجل الأصلي والطبقة الظاهرية والتاريخ كله.",
             ImplementationPhase: "03 / 11",
             CurrentStage: RequirementImplementationStage.FoundationReadyServicePlanned,
             ImplementedArtifactsInCurrentCode: new[]
@@ -719,19 +719,19 @@ public sealed class RequirementTraceabilityService
             },
             EffectiveDateAndAuditInvariants: new[]
             {
-                "الجدول الأساسي AuditEvents غير قابل للتعديل أو الحذف الفيزيائي ومرتبط بسلسلة تجزئة (EventHash / PriorEventHash).",
+                "أثناء الاستخدام المعتاد الجدول الأساسي AuditEvents غير قابل للتعديل أو الحذف الفيزيائي ومرتبط بسلسلة تجزئة (EventHash / PriorEventHash)؛ التصفير الشامل المعتمد استثناء وحيد يمحو قاعدة البيانات بما فيها السجل الخام والتاريخ كله.",
                 "التعديل أو الحذف الظاهري يُحفظ كطبقة فوقية في AuditLogPresentationEdits مع رقم إصدار OverlayVersion وسبب التعديل والمنفذ."
             },
             ExternalVerificationSteps: new[]
             {
                 "التحقق من أن ProjectActorDisplay() يعرض [اسم المستخدم] - [الاسم الكامل بحسب الكشف] للحسابات المرتبطة.",
-                "اختبار قدرة كل من GeneralAdministration وOrdinaryAdministration على تعديل/حذف قيد ظاهر في سجل العمليات ومنع Supervisor."
+                "اختبار قدرة كل من GeneralAdministration وOrdinaryAdministration على تعديل/حذف قيد ظاهر في سجل العمليات ومنع Supervisor؛ منع تعديل أو مسح AuditEvents الخام أثناء التشغيل المعتاد، مع تأكيد إزالته مع طبقة العرض عند التصفير الشامل وحده."
             }),
 
         new CanonicalRequirementTraceDto(
             RequirementId: "REQ-12-SETTINGS-BACKUP-RESTORE-RESET",
-            SourcePassageArabic: "رابعاً: الإعدادات — نسخة احتياطية، استيراد نسخة احتياطية، النسخ الاحتياطي التلقائي الساعة 16:00 على القرص E:\\، حذف جميع بيانات البرنامج، بيانات البرنامج، المظهر وفحص السلامة.",
-            ApprovedDecisionArabic: "فحص سلامة النسخة الاحتياطية (SHA-256 + PRAGMA integrity_check)؛ حصر حذف جميع بيانات البرنامج (ResetApplicationData) بالإدارة العامة فقط واشتراط نجاح نسخة احتياطية موثقة قبل التصفير (ResetBackupGateFailed).",
+            SourcePassageArabic: "رابعاً: الإعدادات — نسخة احتياطية، استيراد نسخة احتياطية، النسخ الاحتياطي التلقائي الساعة 16:00 على القرص E:\\، حذف جميع بيانات البرنامج وجميع نسخه الاحتياطية بعد التحذير وتأكيد كلمة المرور، بيانات البرنامج، المظهر وفحص السلامة.",
+            ApprovedDecisionArabic: "فحص سلامة النسخ الاحتياطية عند إنشائها أو استعادتها (SHA-256 + PRAGMA integrity_check)؛ حذف بيانات البرنامج وجميع النسخ الاحتياطية المُدارة داخل مساراته المعتمدة حصري للإدارة العامة بعد تحذير يبين النطاق وإعادة تحقق كلمة المرور الحالية وتأكيد صريح؛ ويشمل الحذف جميع سجلات العمليات (AuditEvents وAuditLogPresentationEdits) والسجلات التاريخية للفرد والتحضير والنقل والأرشيف، دون استثناء لسجلات التدقيق؛ إنشاء نسخة احتياطية قبل الحذف اختياري وليس شرطاً؛ لا تُحذف ملفات أو نسخ احتياطية خارج المسارات المخصصة للبرنامج.",
             ImplementationPhase: "12 / 13",
             CurrentStage: RequirementImplementationStage.FoundationReadyServicePlanned,
             ImplementedArtifactsInCurrentCode: new[]
@@ -769,7 +769,7 @@ public sealed class RequirementTraceabilityService
                 BridgeErrorCodes.MissingEVolume,
                 BridgeErrorCodes.InsufficientDiskSpace,
                 BridgeErrorCodes.ScheduleUnavailable,
-                BridgeErrorCodes.ResetBackupGateFailed,
+                BridgeErrorCodes.ResetConfirmationRequired,
                 BridgeErrorCodes.StorageBusy
             },
             InvalidationEvents: new[]
@@ -779,13 +779,13 @@ public sealed class RequirementTraceabilityService
             },
             EffectiveDateAndAuditInvariants: new[]
             {
-                "رفض تنفيذ CommitFullReset لغير GeneralAdministration (Unauthorized) أو بدون نسخة احتياطية ناجحة حديثة (ResetBackupGateFailed).",
+                "رفض CommitFullReset لغير GeneralAdministration (Unauthorized)، أو عند عدم إقرار تحذير يشمل حذف البيانات والنسخ المُدارة وسجل العمليات الخام والتاريخ وعدم تأكيد الحذف (ResetConfirmationRequired)، أو عدم التحقق الآمن من كلمة المرور الحالية (Unauthorized)، بغض النظر عن وجود نسخة احتياطية حديثة. عند نجاح التصفير الشامل تُزال جميع بيانات البرنامج التاريخية (بما فيها AuditEvents وAuditLogPresentationEdits) ولا يُحتفظ بسجل تدقيق داخل قاعدة البيانات المحذوفة. لا يُسمح بحذف أي مسار خارج الجذور المخصصة للبرنامج؛ تُرفض محاولات اجتياز المسارات والروابط المعيدة للتوجيه.",
                 "فحص PRAGMA integrity_check وSHA-256 قبل اعتماد أي نسخة احتياطية أو استعادتها."
             },
             ExternalVerificationSteps: new[]
             {
                 "التحقق من إعدادات البذر الافتراضية (AutoBackupTimeLocal=16:00، PreferredBackupDirectory=E:\\AlTamamAlYawmi\\Backups).",
-                "اختبار منع OrdinaryAdministration وSupervisor من تنفيذ PreviewFullReset/CommitFullReset."
+                "اختبار منع OrdinaryAdministration وSupervisor من تنفيذ PreviewFullReset/CommitFullReset، ورفض كلمة المرور غير المتحقق منها أو غياب التحذير أو التأكيد، وقبول الحذف دون نسخة احتياطية إلزامية. اختبر أثناء الاستخدام المعتاد منع الحذف الفيزيائي لـ AuditEvents مع السماح بتعديل العرض؛ وعند التصفير الشامل تحقق من اختفاء AuditEvents وAuditLogPresentationEdits وجميع تواريخ الهوية والتحضير والنقل والأرشيف، وحذف النسخ المُدارة داخل المسارات المعتمدة فقط، ورفض مسارات الخروج والروابط الرمزية، وبقاء نسخ الاختبار الموجودة خارج جذور البرنامج دون مساس."
             })
     };
 

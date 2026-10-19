@@ -26,7 +26,7 @@ public static class BridgeErrorCodes
     public const string MissingEVolume = "MissingEVolume";
     public const string InsufficientDiskSpace = "InsufficientDiskSpace";
     public const string ScheduleUnavailable = "ScheduleUnavailable";
-    public const string ResetBackupGateFailed = "ResetBackupGateFailed";
+    public const string ResetConfirmationRequired = "ResetConfirmationRequired";
     public const string StorageBusy = "StorageBusy";
     public const string ClockRollbackSuspected = "ClockRollbackSuspected";
 
@@ -37,7 +37,7 @@ public static class BridgeErrorCodes
         TransferDayAttendanceForbidden, InvalidTransferSites, OverlappingAssignments,
         HistoricDayLocked, CustomStatusInactive, ImportPlanStale, InvalidWorkbook,
         ExcelExportFailed, BackupIntegrityFailed, WrongRecoveryKey, MissingEVolume,
-        InsufficientDiskSpace, ScheduleUnavailable, ResetBackupGateFailed,
+        InsufficientDiskSpace, ScheduleUnavailable, ResetConfirmationRequired,
         StorageBusy, ClockRollbackSuspected
     };
 }
