@@ -217,33 +217,42 @@ public sealed class SqliteSchemaCatalogProbe : ISchemaCatalogProbe
             var auditEvent = await _dbContext.ExecuteInWriteTransactionAsync(
                 async (connection, transaction) =>
                 {
-                    string? previousManifestJson = null;
-                    await using (var readOldCmd = connection.CreateCommand())
-                    {
-                        readOldCmd.Transaction = transaction;
-                        readOldCmd.CommandText = "SELECT SettingValue FROM AppSettings WHERE SettingKey = $key LIMIT 1;";
-                        readOldCmd.Parameters.AddWithValue("$key", "PolicyConflictsResolutionManifest");
-                        var existingScalar = await readOldCmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-                        if (existingScalar is string existingText && !string.IsNullOrWhiteSpace(existingText))
-                        {
-                            previousManifestJson = existingText;
-                        }
-                    }
+                    // Replaying the same correlation must not rewrite AppSettings without a new audit event.
+                    // The audit append function returns the original event for this correlation.
+                    var isReplay = await HasExistingAuditCorrelationAsync(
+                        connection, transaction, "POLICY_CONFLICTS_RESOLVED", correlationId, cancellationToken).ConfigureAwait(false);
 
-                    await using (var settingCmd = connection.CreateCommand())
+                    string? previousManifestJson = null;
+                    if (!isReplay)
                     {
-                        settingCmd.Transaction = transaction;
-                        settingCmd.CommandText = """
-                            INSERT INTO AppSettings (SettingKey, SettingValue, UpdatedAtUtc)
-                            VALUES ($key, $val, $updatedAt)
-                            ON CONFLICT(SettingKey) DO UPDATE SET
-                                SettingValue = excluded.SettingValue,
-                                UpdatedAtUtc = excluded.UpdatedAtUtc;
-                            """;
-                        settingCmd.Parameters.AddWithValue("$key", "PolicyConflictsResolutionManifest");
-                        settingCmd.Parameters.AddWithValue("$val", resolutionManifestJson);
-                        settingCmd.Parameters.AddWithValue("$updatedAt", _clock.UtcNow.ToUniversalTime().ToString("O"));
-                        await settingCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                        await using (var readOldCmd = connection.CreateCommand())
+                        {
+                            readOldCmd.Transaction = transaction;
+                            readOldCmd.CommandText = "SELECT SettingValue FROM AppSettings WHERE SettingKey = $key LIMIT 1;";
+                            readOldCmd.Parameters.AddWithValue("$key", "PolicyConflictsResolutionManifest");
+                            var existingScalar = await readOldCmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                            if (existingScalar is string existingText && !string.IsNullOrWhiteSpace(existingText))
+                            {
+                                previousManifestJson = existingText;
+                            }
+                        }
+
+                        await using (var settingCmd = connection.CreateCommand())
+                        {
+                            settingCmd.Transaction = transaction;
+                            settingCmd.CommandText = """
+                                INSERT INTO AppSettings (SettingKey, SettingValue, UpdatedAtUtc)
+                                VALUES ($key, $val, $updatedAt)
+                                ON CONFLICT(SettingKey) DO UPDATE SET
+                                    SettingValue = excluded.SettingValue,
+                                    UpdatedAtUtc = excluded.UpdatedAtUtc;
+                                """;
+                            settingCmd.Parameters.AddWithValue("$key", "PolicyConflictsResolutionManifest");
+                            settingCmd.Parameters.AddWithValue("$val", resolutionManifestJson);
+                            settingCmd.Parameters.AddWithValue("$updatedAt", _clock.UtcNow.ToUniversalTime().ToString("O"));
+                            await settingCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                        }
+
                     }
 
                     return await SqliteAuditEventWriter.AppendAsync(
@@ -337,33 +346,42 @@ public sealed class SqliteSchemaCatalogProbe : ISchemaCatalogProbe
             var auditEvent = await _dbContext.ExecuteInWriteTransactionAsync(
                 async (connection, transaction) =>
                 {
-                    string? previousSummaryJson = null;
-                    await using (var readOldCmd = connection.CreateCommand())
-                    {
-                        readOldCmd.Transaction = transaction;
-                        readOldCmd.CommandText = "SELECT SettingValue FROM AppSettings WHERE SettingKey = $key LIMIT 1;";
-                        readOldCmd.Parameters.AddWithValue("$key", "SourceBaselineVerificationSummary");
-                        var existingScalar = await readOldCmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-                        if (existingScalar is string existingText && !string.IsNullOrWhiteSpace(existingText))
-                        {
-                            previousSummaryJson = existingText;
-                        }
-                    }
+                    // Replaying the same correlation must not rewrite AppSettings without a new audit event.
+                    // The audit append function returns the original event for this correlation.
+                    var isReplay = await HasExistingAuditCorrelationAsync(
+                        connection, transaction, "SOURCE_BASELINE_INVENTORIED", correlationId, cancellationToken).ConfigureAwait(false);
 
-                    await using (var settingCmd = connection.CreateCommand())
+                    string? previousSummaryJson = null;
+                    if (!isReplay)
                     {
-                        settingCmd.Transaction = transaction;
-                        settingCmd.CommandText = """
-                            INSERT INTO AppSettings (SettingKey, SettingValue, UpdatedAtUtc)
-                            VALUES ($key, $val, $updatedAt)
-                            ON CONFLICT(SettingKey) DO UPDATE SET
-                                SettingValue = excluded.SettingValue,
-                                UpdatedAtUtc = excluded.UpdatedAtUtc;
-                            """;
-                        settingCmd.Parameters.AddWithValue("$key", "SourceBaselineVerificationSummary");
-                        settingCmd.Parameters.AddWithValue("$val", baselineSummaryJson);
-                        settingCmd.Parameters.AddWithValue("$updatedAt", _clock.UtcNow.ToUniversalTime().ToString("O"));
-                        await settingCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                        await using (var readOldCmd = connection.CreateCommand())
+                        {
+                            readOldCmd.Transaction = transaction;
+                            readOldCmd.CommandText = "SELECT SettingValue FROM AppSettings WHERE SettingKey = $key LIMIT 1;";
+                            readOldCmd.Parameters.AddWithValue("$key", "SourceBaselineVerificationSummary");
+                            var existingScalar = await readOldCmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                            if (existingScalar is string existingText && !string.IsNullOrWhiteSpace(existingText))
+                            {
+                                previousSummaryJson = existingText;
+                            }
+                        }
+
+                        await using (var settingCmd = connection.CreateCommand())
+                        {
+                            settingCmd.Transaction = transaction;
+                            settingCmd.CommandText = """
+                                INSERT INTO AppSettings (SettingKey, SettingValue, UpdatedAtUtc)
+                                VALUES ($key, $val, $updatedAt)
+                                ON CONFLICT(SettingKey) DO UPDATE SET
+                                    SettingValue = excluded.SettingValue,
+                                    UpdatedAtUtc = excluded.UpdatedAtUtc;
+                                """;
+                            settingCmd.Parameters.AddWithValue("$key", "SourceBaselineVerificationSummary");
+                            settingCmd.Parameters.AddWithValue("$val", baselineSummaryJson);
+                            settingCmd.Parameters.AddWithValue("$updatedAt", _clock.UtcNow.ToUniversalTime().ToString("O"));
+                            await settingCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                        }
+
                     }
 
                     return await SqliteAuditEventWriter.AppendAsync(
@@ -434,6 +452,20 @@ public sealed class SqliteSchemaCatalogProbe : ISchemaCatalogProbe
                 "تعذر قراءة ملخص خط الأساس من قاعدة البيانات.",
                 ex.Message);
         }
+    }
+
+    /// <summary>Check whether a transaction's correlation was already committed.
+    /// Prevents replayed requests from overwriting the persisted settings without a matching new audit event.</summary>
+    private static async Task<bool> HasExistingAuditCorrelationAsync(
+        SqliteConnection connection, SqliteTransaction transaction, string operationCode,
+        string correlationId, CancellationToken cancellationToken)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.Transaction = transaction;
+        cmd.CommandText = "SELECT EXISTS(SELECT 1 FROM AuditEvents WHERE OperationCode = $op AND CorrelationId = $cor LIMIT 1);";
+        cmd.Parameters.AddWithValue("$op", operationCode);
+        cmd.Parameters.AddWithValue("$cor", correlationId);
+        return Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false)) == 1;
     }
 
     private static async Task<string?> ExecuteScalarStringAsync(
