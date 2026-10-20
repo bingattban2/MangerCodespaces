@@ -21,9 +21,9 @@ public sealed class WindowsDatabaseKeyStore
         byte[] raw;
         if (File.Exists(_keyPath))
         {
-            var protectedBytes = File.ReadAllBytes(_keyPath);
-            if (protectedBytes.Length is < 32 or > 16384)
+            if (new FileInfo(_keyPath).Length is < 32 or > 16384)
                 throw new CryptographicException("The protected database key is invalid; recovery is required.");
+            var protectedBytes = File.ReadAllBytes(_keyPath);
             raw = Transform(protectedBytes, protect: false);
         }
         else

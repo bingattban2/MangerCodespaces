@@ -20,7 +20,9 @@ public static class SchemaMigrationPolicy
             );
             """;
         await table.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(sql)));
+        // Git checkouts on Windows may use CRLF; that must not invent a migration change.
+        var canonicalSql = sql.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonicalSql)));
         using var lookup = connection.CreateCommand();
         lookup.Transaction = transaction;
         lookup.CommandText = "SELECT Sha256 FROM AppliedSchemaComponents WHERE MigrationName=$name";
