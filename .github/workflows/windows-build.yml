@@ -109,7 +109,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: bingattban2/AlTamam-External-Verification
-          ref: edabc4b8a70cf65192ff4c62dcd2b0b0211955e8
+          ref: 574bc12fe8c1310501a21eb522a83f118444f65c
           token: ${{ secrets.ALTAMAM_VERIFIER_READ_TOKEN }}
           path: verifier
           persist-credentials: false
@@ -127,7 +127,7 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $sha.Length -ne 40) { throw 'Production checkout lacks a valid source SHA' }
           Write-Host "VERIFIED_PRODUCTION_SHA=$sha"
           $approvedVerifier = (& git -C $verifier rev-parse HEAD).Trim()
-          if ($approvedVerifier -ne 'edabc4b8a70cf65192ff4c62dcd2b0b0211955e8') { throw 'External verifier checkout does not match approved SHA' }
+          if ($approvedVerifier -ne '574bc12fe8c1310501a21eb522a83f118444f65c') { throw 'External verifier checkout does not match approved SHA' }
           & (Join-Path $verifier 'verify_phase01_current_regression.ps1') -RepositoryRoot $source -ResultsDirectory $output -ExpectedCommit $sha
           if ($LASTEXITCODE -ne 0) { throw "Current production regression failed: exit $LASTEXITCODE" }
       - name: Reverify project graph and conservative cleanup independently
@@ -353,6 +353,26 @@ jobs:
             if($hits.Count -ne 1){throw "Required 02.03 persisted case not met: $name"}
           }
           Write-Host "PHASE02_STEP0203_EXTERNAL=PASS; checks=$(@($proof.cases).Count); source=$sha; phaseGate=NOT_RUN"
+      - name: Verify encryption keys and safe migrations in final Phase 02 gate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $source=Join-Path $env:GITHUB_WORKSPACE 'source'
+          $verifier=Join-Path $env:GITHUB_WORKSPACE 'verifier'
+          $out=Join-Path $env:GITHUB_WORKSPACE 'independent-phase02-evidence'
+          [IO.Directory]::CreateDirectory($out)|Out-Null
+          $sha=(& git -C $source rev-parse HEAD).Trim()
+          $env:AlTamamRepoRoot=$source
+          $runner=Join-Path $verifier 'Phase02SecurityMigrationRunner/Phase02SecurityMigrationRunner.csproj'
+          & dotnet run --project $runner -c Release -- (Join-Path $out 'security-migrations.json') $sha *>&1 |
+            Tee-Object -FilePath (Join-Path $out 'security-migrations.log')
+          if($LASTEXITCODE -ne 0){throw 'Encryption key or safe migration acceptance failed'}
+          $proof=Get-Content (Join-Path $out 'security-migrations.json') -Raw|ConvertFrom-Json
+          if($proof.status -ne 'PASS' -or $proof.sourceSha -ne $sha -or
+             @($proof.cases).Count -ne 14 -or @($proof.failures).Count -ne 0){
+            throw 'Missing real Windows DPAPI and encrypted recovery evidence'
+          }
+          Write-Host "PHASE02_SECURITY_MIGRATIONS=PASS; source=$sha; cases=14"
       - name: Upload isolated verification logs
         if: always()
         uses: actions/upload-artifact@v4
