@@ -14,5 +14,6 @@
     <PackageReference Include="Konscious.Security.Cryptography.Argon2" />
     <EmbeddedResource Include="Persistence/Migrations/V001_InitialSchema.sql" />
     <EmbeddedResource Include="Persistence/Migrations/V001_RelationalGuards.sql" />
+    <EmbeddedResource Include="Persistence/Migrations/V001_TemporalGuards.sql" />
   </ItemGroup>
 </Project>
