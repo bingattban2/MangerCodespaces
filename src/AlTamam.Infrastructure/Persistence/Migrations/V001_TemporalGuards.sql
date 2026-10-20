@@ -223,3 +223,22 @@ BEGIN
       AND (a.ValidToLocalDate IS NULL OR NEW.AttendanceLocalDate<a.ValidToLocalDate)
   );
 END;
+
+-- A future effective-date correction must never invalidate a committed historical
+-- attendance day. This belongs on the *assignment UPDATE* itself: validating only
+-- AttendanceRecords INSERT/UPDATE leaves a bypass when an existing assignment is shrunk.
+-- Half-open effective bounds: start <= day < end; NULL end means unbounded.
+CREATE TRIGGER IF NOT EXISTS TR_0203_Assignment_PreserveCommittedAttendance_Update
+BEFORE UPDATE OF ValidFromLocalDate, ValidToLocalDate, PersonId, SiteId ON PersonAssignments
+WHEN EXISTS (
+    SELECT 1 FROM AttendanceRecords ar
+    WHERE ar.AssignmentIdAtEffectiveDate = OLD.AssignmentId
+      AND (ar.PersonId <> NEW.PersonId
+           OR ar.SiteIdAtEffectiveDate <> NEW.SiteId
+           OR ar.AttendanceLocalDate < NEW.ValidFromLocalDate
+           OR (NEW.ValidToLocalDate IS NOT NULL
+               AND ar.AttendanceLocalDate >= NEW.ValidToLocalDate))
+)
+BEGIN
+    SELECT RAISE(ABORT, 'Changing assignment interval would invalidate committed attendance history');
+END;
