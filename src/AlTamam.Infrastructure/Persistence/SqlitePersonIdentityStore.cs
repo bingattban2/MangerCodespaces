@@ -122,6 +122,18 @@ public sealed class SqlitePersonIdentityStore : IPersonIdentityStore
             return ServiceResult<PersonHistoricIdentityDto>.Fail(BridgeErrorCodes.StorageBusy,
                 "قاعدة البيانات مشغولة، حاول مجدداً.", ex.Message);
         }
+        catch (SqliteException ex)
+        {
+            return ServiceResult<PersonHistoricIdentityDto>.Fail(
+                BridgeErrorCodes.BackupIntegrityFailed,
+                "تعذر قراءة هوية الفرد التاريخية من قاعدة البيانات المشفرة.", ex.Message);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return ServiceResult<PersonHistoricIdentityDto>.Fail(
+                BridgeErrorCodes.BackupIntegrityFailed,
+                "تعذر فتح بيانات هوية الفرد التاريخية.", ex.Message);
+        }
     }
 
     public async Task<ServiceResult<IReadOnlyList<HistoricAttendanceDayDto>>> ReadMonthlyHistoryAsync(
