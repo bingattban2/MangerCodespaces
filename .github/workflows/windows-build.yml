@@ -109,7 +109,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: bingattban2/AlTamam-External-Verification
-          ref: ac705916fd0114442dfdf5914a0249be074ac402
+          ref: 6e07a0f61d8bd1865273c977a9037cd9aa37500f
           token: ${{ secrets.ALTAMAM_VERIFIER_READ_TOKEN }}
           path: verifier
           persist-credentials: false
@@ -127,7 +127,7 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $sha.Length -ne 40) { throw 'Production checkout lacks a valid source SHA' }
           Write-Host "VERIFIED_PRODUCTION_SHA=$sha"
           $approvedVerifier = (& git -C $verifier rev-parse HEAD).Trim()
-          if ($approvedVerifier -ne 'ac705916fd0114442dfdf5914a0249be074ac402') { throw 'External verifier checkout does not match approved SHA' }
+          if ($approvedVerifier -ne '6e07a0f61d8bd1865273c977a9037cd9aa37500f') { throw 'External verifier checkout does not match approved SHA' }
           & (Join-Path $verifier 'verify_phase01_current_regression.ps1') -RepositoryRoot $source -ResultsDirectory $output -ExpectedCommit $sha
           if ($LASTEXITCODE -ne 0) { throw "Current production regression failed: exit $LASTEXITCODE" }
       - name: Reverify project graph and conservative cleanup independently
@@ -158,8 +158,20 @@ jobs:
           if ($exit -ne 0) { throw "Real SQLCipher identity diagnostic failed: $exit" }
           $proof = Get-Content -LiteralPath (Join-Path $out 'identity-results.json') -Raw | ConvertFrom-Json
           if ($proof.status -ne 'PASS' -or $proof.productionCommit -ne $sha -or
-              @($proof.checks).Count -lt 12 -or @($proof.failures).Count -gt 0) {
+              @($proof.checks).Count -lt 20 -or @($proof.failures).Count -gt 0) {
             throw 'Missing positive and negative persisted-state identity evidence'
+          }
+          $mandatory = @(
+            'Historical monthly API is immutable after person/site/status display edits',
+            'Explicit ValidTo terminates the as-of interval without current-label fallback',
+            'Reopen SQLCipher preserves historical monthly API snapshots',
+            'Same requestId with changed reason is not accepted as original',
+            'Active service number duplicate rolls back',
+            'Unauthorized session cannot mutate person'
+          )
+          foreach($name in $mandatory) {
+            $matching = @($proof.checks | Where-Object { $_.name -eq $name -and $_.pass -eq $true })
+            if ($matching.Count -ne 1) { throw "Missing required 02.01 acceptance assertion: $name" }
           }
           Write-Host "PHASE02_STEP0201_EXTERNAL=PASS; source=$sha; checked=$(@($proof.checks).Count); phaseGate=NOT_RUN"
       - name: Upload isolated verification logs
