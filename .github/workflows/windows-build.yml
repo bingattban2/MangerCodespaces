@@ -234,7 +234,7 @@ jobs:
           foreach($name in @(
             'Immutable PersonId denied even for referenced person',
             'Immutable SiteId denied',
-            'Committed daily attendance cannot be deleted',
+            'Committed attendance cannot be deleted',
             'Historic identity row cannot be deleted',
             'Unknown SourceMovementId rejected',
             'Wrong attendance assignment-person/site combination rejected',
