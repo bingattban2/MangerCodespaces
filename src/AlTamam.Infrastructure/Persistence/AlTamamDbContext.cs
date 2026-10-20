@@ -126,7 +126,26 @@ public sealed class AlTamamDbContext : IDisposable
                         (SELECT COUNT(*) FROM AttendanceRecords a
                          WHERE NOT EXISTS (SELECT 1 FROM PersonAssignments p
                            WHERE p.AssignmentId = a.AssignmentIdAtEffectiveDate
-                             AND p.PersonId = a.PersonId AND p.SiteId = a.SiteIdAtEffectiveDate));
+                             AND p.PersonId = a.PersonId AND p.SiteId = a.SiteIdAtEffectiveDate))
+                        +
+                        (SELECT COUNT(*) FROM AttendanceRevisions r
+                         WHERE NOT EXISTS (SELECT 1 FROM AttendanceStatusDefinitions s
+                                           WHERE s.StatusId=r.BeforeStatusId)
+                            OR NOT EXISTS (SELECT 1 FROM AttendanceStatusDefinitions s
+                                           WHERE s.StatusId=r.AfterStatusId))
+                        +
+                        (SELECT COUNT(*) FROM AttendanceDrafts d
+                         WHERE COALESCE(json_valid(d.SelectedPersonIdsJson),0)=0
+                            OR CASE WHEN json_valid(d.SelectedPersonIdsJson)
+                                    THEN json_type(d.SelectedPersonIdsJson)<>'array'
+                                    ELSE 1 END
+                            OR EXISTS (
+                              SELECT 1 FROM json_each(
+                                CASE WHEN json_valid(d.SelectedPersonIdsJson)
+                                     THEN d.SelectedPersonIdsJson ELSE '[]' END) AS member
+                              WHERE member.type<>'text'
+                                OR NOT EXISTS (SELECT 1 FROM Persons p
+                                               WHERE p.PersonId=member.value)));
                     """;
                 var orphanCount = Convert.ToInt64(await relationCheck.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false));
                 if (orphanCount != 0)

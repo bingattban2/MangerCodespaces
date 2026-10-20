@@ -109,7 +109,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: bingattban2/AlTamam-External-Verification
-          ref: d9441621c9c347d83565c094a906124212295ee6
+          ref: ff93f9608099a5d220dce28032ae7fcd3c9cdaec
           token: ${{ secrets.ALTAMAM_VERIFIER_READ_TOKEN }}
           path: verifier
           persist-credentials: false
@@ -127,7 +127,7 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $sha.Length -ne 40) { throw 'Production checkout lacks a valid source SHA' }
           Write-Host "VERIFIED_PRODUCTION_SHA=$sha"
           $approvedVerifier = (& git -C $verifier rev-parse HEAD).Trim()
-          if ($approvedVerifier -ne 'd9441621c9c347d83565c094a906124212295ee6') { throw 'External verifier checkout does not match approved SHA' }
+          if ($approvedVerifier -ne 'ff93f9608099a5d220dce28032ae7fcd3c9cdaec') { throw 'External verifier checkout does not match approved SHA' }
           & (Join-Path $verifier 'verify_phase01_current_regression.ps1') -RepositoryRoot $source -ResultsDirectory $output -ExpectedCommit $sha
           if ($LASTEXITCODE -ne 0) { throw "Current production regression failed: exit $LASTEXITCODE" }
       - name: Reverify project graph and conservative cleanup independently
@@ -228,7 +228,7 @@ jobs:
           if($exit -ne 0){throw "Real SQLCipher 02.02 constraint verification failed: $exit"}
           $proof=Get-Content -LiteralPath (Join-Path $out 'schema-constraints.json') -Raw|ConvertFrom-Json
           if($proof.status -ne 'PASS' -or $proof.productionSha -ne $sha -or
-             @($proof.checks).Count -lt 35 -or @($proof.failures).Count -ne 0) {
+             @($proof.checks).Count -lt 49 -or @($proof.failures).Count -ne 0) {
              throw 'Missing committed SQLCipher schema and deletion-denial evidence'
           }
           foreach($name in @(
@@ -241,7 +241,13 @@ jobs:
             'Existing V001 orphan blocks hardening and preserves original row',
             'Existing clean V001 upgraded idempotently without schema-version rewrite',
             'Real SQLite foreign_key_check reports zero orphans',
-            'Close and reopen SQLCipher retains constraints and rows')) {
+            'Close and reopen SQLCipher retains constraints and rows',
+            'Immutable assignment site prevents redirecting old attendance',
+            'Revision links forbid deleting referenced status without its own history',
+            'Historic role change cannot be deleted',
+            'Malformed JSON draft person list rejected',
+            'JSON draft person list must reference stable existing PersonId',
+            'Person delete rejected when referenced only in draft person JSON')) {
             $matches=@($proof.checks|Where-Object{$_.name -eq $name -and $_.pass -eq $true})
             if($matches.Count -ne 1){throw "Required 02.02 assertion missing: $name"}
           }

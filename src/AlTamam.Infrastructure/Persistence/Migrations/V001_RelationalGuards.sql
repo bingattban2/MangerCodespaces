@@ -145,3 +145,84 @@ WHEN NOT EXISTS (
  WHERE p.AssignmentId=NEW.AssignmentIdAtEffectiveDate
    AND p.PersonId=NEW.PersonId AND p.SiteId=NEW.SiteIdAtEffectiveDate)
 BEGIN SELECT RAISE(ABORT, 'Attendance assignment/person/site mismatch'); END;
+
+-- 02.02 supplementary invariants. Keep technical IDs separate from display labels.
+-- To change a person's site, create a new effective-dated AssignmentId instead
+-- of silently pointing an older assignment at another SiteId.
+CREATE TRIGGER IF NOT EXISTS TR_0202_AssignmentSite_Immutable
+BEFORE UPDATE OF SiteId ON PersonAssignments
+WHEN NEW.SiteId <> OLD.SiteId
+BEGIN SELECT RAISE(ABORT, 'Immutable assignment SiteId'); END;
+
+CREATE TRIGGER IF NOT EXISTS TR_0202_UserId_Immutable
+BEFORE UPDATE OF UserId ON Users
+WHEN NEW.UserId <> OLD.UserId
+BEGIN SELECT RAISE(ABORT, 'Immutable UserId'); END;
+CREATE TRIGGER IF NOT EXISTS TR_0202_FieldDefinitionId_Immutable
+BEFORE UPDATE OF FieldDefinitionId ON CustomFieldDefinitions
+WHEN NEW.FieldDefinitionId <> OLD.FieldDefinitionId
+BEGIN SELECT RAISE(ABORT, 'Immutable FieldDefinitionId'); END;
+
+-- AttendanceRevisions contains explicit technical StatusId references even though
+-- V001 declared them as TEXT without an FK. Preserve immutable before/after
+-- labels as snapshots; never resolve a historic revision by today's display name.
+CREATE INDEX IF NOT EXISTS IX_AttendanceRevisions_BeforeStatus
+ON AttendanceRevisions(BeforeStatusId);
+CREATE INDEX IF NOT EXISTS IX_AttendanceRevisions_AfterStatus
+ON AttendanceRevisions(AfterStatusId);
+CREATE TRIGGER IF NOT EXISTS TR_0202_RevisionStatus_Insert
+BEFORE INSERT ON AttendanceRevisions
+WHEN NOT EXISTS (
+ SELECT 1 FROM AttendanceStatusDefinitions WHERE StatusId=NEW.BeforeStatusId)
+ OR NOT EXISTS (
+ SELECT 1 FROM AttendanceStatusDefinitions WHERE StatusId=NEW.AfterStatusId)
+BEGIN SELECT RAISE(ABORT, 'Unknown historical revision status'); END;
+CREATE TRIGGER IF NOT EXISTS TR_0202_RevisionStatus_RestrictDelete
+BEFORE DELETE ON AttendanceStatusDefinitions
+WHEN EXISTS (
+ SELECT 1 FROM AttendanceRevisions
+ WHERE BeforeStatusId=OLD.StatusId OR AfterStatusId=OLD.StatusId)
+BEGIN SELECT RAISE(ABORT, 'Status referenced by immutable attendance revision'); END;
+CREATE TRIGGER IF NOT EXISTS TR_0202_UserRoleHistory_Immutable
+BEFORE UPDATE ON UserRoleHistory
+BEGIN SELECT RAISE(ABORT, 'User role history immutable'); END;
+CREATE TRIGGER IF NOT EXISTS TR_0202_UserRoleHistory_NoDelete
+BEFORE DELETE ON UserRoleHistory
+BEGIN SELECT RAISE(ABORT, 'User role history cannot be deleted'); END;
+
+-- V001 retains selected draft person IDs as JSON rather than an FK join table.
+-- Protect these referenced stable PersonIds without redesigning that schema.
+-- json_valid CASE also handles malformed input without invoking json_each on it.
+CREATE TRIGGER IF NOT EXISTS TR_0202_DraftPersons_Insert
+BEFORE INSERT ON AttendanceDrafts
+WHEN COALESCE(json_valid(NEW.SelectedPersonIdsJson),0)=0
+ OR CASE WHEN json_valid(NEW.SelectedPersonIdsJson)
+       THEN json_type(NEW.SelectedPersonIdsJson) <> 'array' ELSE 1 END
+ OR EXISTS (
+   SELECT 1 FROM json_each(
+      CASE WHEN json_valid(NEW.SelectedPersonIdsJson)
+           THEN NEW.SelectedPersonIdsJson ELSE '[]' END) AS j
+   WHERE j.type <> 'text'
+     OR NOT EXISTS (SELECT 1 FROM Persons p WHERE p.PersonId=j.value))
+BEGIN SELECT RAISE(ABORT, 'Invalid or unknown draft PersonId'); END;
+CREATE TRIGGER IF NOT EXISTS TR_0202_DraftPersons_Update
+BEFORE UPDATE OF SelectedPersonIdsJson ON AttendanceDrafts
+WHEN COALESCE(json_valid(NEW.SelectedPersonIdsJson),0)=0
+ OR CASE WHEN json_valid(NEW.SelectedPersonIdsJson)
+       THEN json_type(NEW.SelectedPersonIdsJson) <> 'array' ELSE 1 END
+ OR EXISTS (
+   SELECT 1 FROM json_each(
+      CASE WHEN json_valid(NEW.SelectedPersonIdsJson)
+           THEN NEW.SelectedPersonIdsJson ELSE '[]' END) AS j
+   WHERE j.type <> 'text'
+     OR NOT EXISTS (SELECT 1 FROM Persons p WHERE p.PersonId=j.value))
+BEGIN SELECT RAISE(ABORT, 'Invalid or unknown draft PersonId'); END;
+CREATE TRIGGER IF NOT EXISTS TR_0202_DraftPersons_RestrictDelete
+BEFORE DELETE ON Persons
+WHEN EXISTS (
+ SELECT 1 FROM AttendanceDrafts d
+ WHERE json_valid(d.SelectedPersonIdsJson)
+   AND EXISTS (
+     SELECT 1 FROM json_each(d.SelectedPersonIdsJson) AS j
+     WHERE j.value=OLD.PersonId))
+BEGIN SELECT RAISE(ABORT, 'Person referenced by attendance draft'); END;
