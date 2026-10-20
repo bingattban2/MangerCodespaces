@@ -1,19 +1,111 @@
 name: Windows Core Build
+
 on:
   push:
   pull_request:
   workflow_dispatch:
+
 permissions:
   contents: read
+
 jobs:
   compile-core:
+    name: Build four production libraries
     runs-on: windows-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - name: Checkout production source
+        uses: actions/checkout@v4
+        with:
+          path: source
+          persist-credentials: false
+      - name: Install .NET 10
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-      - name: Restore production projects
-        run: dotnet restore AlTamam.slnx
-      - name: Compile production foundation
-        run: dotnet build AlTamam.slnx --configuration Release --no-restore
+      - name: Restore production solution
+        shell: pwsh
+        working-directory: source
+        run: |
+          dotnet restore AlTamam.slnx -warnaserror
+          if ($LASTEXITCODE -ne 0) { throw "Production restore failed: exit $LASTEXITCODE" }
+      - name: Compile Release with warnings as errors
+        shell: pwsh
+        working-directory: source
+        run: |
+          dotnet build AlTamam.slnx --configuration Release --no-restore -warnaserror
+          if ($LASTEXITCODE -ne 0) { throw "Production Release build failed: exit $LASTEXITCODE" }
+      - name: Verify real build outputs and block premature release
+        shell: pwsh
+        working-directory: source
+        run: |
+          $projects = @('Domain','Contracts','Application','Infrastructure')
+          foreach ($project in $projects) {
+            $dll = "src/AlTamam.$project/bin/Release/net10.0/AlTamam.$project.dll"
+            if (-not (Test-Path -LiteralPath $dll -PathType Leaf)) { throw "Missing compiled DLL: $dll" }
+            if ((Get-Item -LiteralPath $dll).Length -le 1024) { throw "Invalid compiled DLL: $dll" }
+          }
+          $hosts = @()
+          foreach ($file in (Get-ChildItem src -Recurse -File -Filter '*.csproj')) {
+            [xml]$project = Get-Content -LiteralPath $file.FullName -Raw
+            $output = $project.SelectSingleNode('/Project/PropertyGroup/OutputType')
+            if ($null -ne $output -and $output.InnerText -in @('Exe','WinExe')) { $hosts += $file.FullName }
+          }
+          if ($hosts.Count -eq 0) { Write-Host 'NO_EXECUTABLE_HOST: This CI only compiles libraries. No publish or release step is enabled.' }
+          Write-Host 'FOUR_PRODUCTION_DLLS_VERIFIED=true'
+
+  external-verification:
+    name: Verify current source with isolated CSharp and SQLCipher suite
+    needs: compile-core
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout exact production revision
+        uses: actions/checkout@v4
+        with:
+          path: source
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Checkout independently reviewed external verification
+        uses: actions/checkout@v4
+        with:
+          repository: bingattban2/AlTamam-External-Verification
+          ref: e011cac6f91be3197b084c5c0087aa1163890aec
+          path: verifier
+          persist-credentials: false
+      - name: Install .NET 10 for independent tests
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Execute all inherited real domain and SQLCipher regressions
+        shell: pwsh
+        run: |
+          $source = Join-Path $env:GITHUB_WORKSPACE 'source'
+          $verifier = Join-Path $env:GITHUB_WORKSPACE 'verifier'
+          $output = Join-Path $env:GITHUB_WORKSPACE 'independent-evidence'
+          $sha = (& git -C $source rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $sha.Length -ne 40) { throw 'Production checkout lacks a valid source SHA' }
+          Write-Host "VERIFIED_PRODUCTION_SHA=$sha"
+          $approvedVerifier = (& git -C $verifier rev-parse HEAD).Trim()
+          if ($approvedVerifier -ne 'e011cac6f91be3197b084c5c0087aa1163890aec') { throw 'External verifier checkout does not match approved SHA' }
+          & (Join-Path $verifier 'verify_phase01_current_regression.ps1') -RepositoryRoot $source -ResultsDirectory $output -ExpectedCommit $sha
+          if ($LASTEXITCODE -ne 0) { throw "Current production regression failed: exit $LASTEXITCODE" }
+      - name: Reverify project graph and conservative cleanup independently
+        shell: pwsh
+        run: |
+          $source = Join-Path $env:GITHUB_WORKSPACE 'source'
+          $verifier = Join-Path $env:GITHUB_WORKSPACE 'verifier'
+          $output = Join-Path $env:GITHUB_WORKSPACE 'independent-graph-evidence'
+          $sha = (& git -C $source rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $sha.Length -ne 40) { throw 'Invalid production SHA for independent graph audit' }
+          & (Join-Path $verifier 'verify_phase01_graph.ps1') -RepositoryRoot $source -ResultsDirectory $output -ExpectedCommit $sha
+          if ($LASTEXITCODE -ne 0) { throw "Independent project graph or cleanup failed: exit $LASTEXITCODE" }
+      - name: Upload isolated verification logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-production-independent-verification
+          path: |
+            independent-evidence/
+            independent-graph-evidence/
+          if-no-files-found: warn
