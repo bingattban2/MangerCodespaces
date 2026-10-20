@@ -95,6 +95,56 @@ public sealed class AlTamamDbContext : IDisposable
                 schema.CommandText = sql;
                 await schema.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
+            // Additive 02.02 guards apply to BOTH fresh V001 databases and already
+            // initialized V001 databases, without rewriting retained V001 or old rows.
+            // The comprehensive versioned migration policy belongs to Phase 02.05.
+            // Reject orphaned/contradictory old data; do not silently repair history.
+            using (var referenceCheck = connection.CreateCommand())
+            {
+                referenceCheck.Transaction = transaction;
+                referenceCheck.CommandText = "PRAGMA foreign_key_check;";
+                await using var invalid = await referenceCheck.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                if (await invalid.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    throw new InvalidOperationException("Existing database contains a foreign-key violation; preserve data and block schema hardening.");
+            }
+            using (var relationCheck = connection.CreateCommand())
+            {
+                relationCheck.Transaction = transaction;
+                relationCheck.CommandText = """
+                    SELECT
+                        (SELECT COUNT(*) FROM PersonAssignments p
+                         WHERE p.SourceMovementId IS NOT NULL AND NOT EXISTS (
+                           SELECT 1 FROM PersonnelMovements m
+                           WHERE m.MovementId = p.SourceMovementId AND m.PersonId = p.PersonId))
+                        +
+                        (SELECT COUNT(*) FROM AttendanceDrafts d
+                         WHERE NOT EXISTS (SELECT 1 FROM AttendanceStatusDefinitions s
+                                          WHERE s.StatusId = d.TargetStatusId)
+                            OR (d.SiteId IS NOT NULL AND NOT EXISTS(
+                                   SELECT 1 FROM Sites s WHERE s.SiteId = d.SiteId)))
+                        +
+                        (SELECT COUNT(*) FROM AttendanceRecords a
+                         WHERE NOT EXISTS (SELECT 1 FROM PersonAssignments p
+                           WHERE p.AssignmentId = a.AssignmentIdAtEffectiveDate
+                             AND p.PersonId = a.PersonId AND p.SiteId = a.SiteIdAtEffectiveDate));
+                    """;
+                var orphanCount = Convert.ToInt64(await relationCheck.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false));
+                if (orphanCount != 0)
+                    throw new InvalidOperationException(
+                        $"Existing database has {orphanCount} inconsistent stable-ID relationships; no rows or historical snapshots changed.");
+            }
+            var guardResource = typeof(AlTamamDbContext).Assembly.GetManifestResourceStream(
+                "AlTamam.Infrastructure.Persistence.Migrations.V001_RelationalGuards.sql")
+                ?? throw new InvalidOperationException("Required additive 02.02 relational guards are missing.");
+            await using (guardResource)
+            using (var reader = new StreamReader(guardResource))
+            {
+                var guardsSql = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+                using var guards = connection.CreateCommand();
+                guards.Transaction = transaction;
+                guards.CommandText = guardsSql;
+                await guards.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         finally { _writeGate.Release(); }
