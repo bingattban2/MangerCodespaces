@@ -187,3 +187,39 @@ BEGIN
       AND (NEW.ValidToLocalDate IS NULL OR oldRow.ValidFromLocalDate < NEW.ValidToLocalDate)
   );
 END;
+
+CREATE TRIGGER IF NOT EXISTS TR_0203_Attendance_ValidDate_Insert
+BEFORE INSERT ON AttendanceRecords
+BEGIN
+  SELECT RAISE(ABORT,'Invalid attendance business date')
+  WHERE length(NEW.AttendanceLocalDate) <> 10
+    OR NEW.AttendanceLocalDate NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+    OR date(NEW.AttendanceLocalDate,'+0 days') IS NULL
+    OR date(NEW.AttendanceLocalDate,'+0 days')<>NEW.AttendanceLocalDate;
+  SELECT RAISE(ABORT,'Attendance is outside the effective assignment interval')
+  WHERE NOT EXISTS (
+    SELECT 1 FROM PersonAssignments a
+    WHERE a.AssignmentId=NEW.AssignmentIdAtEffectiveDate
+      AND a.PersonId=NEW.PersonId AND a.SiteId=NEW.SiteIdAtEffectiveDate
+      AND a.ValidFromLocalDate<=NEW.AttendanceLocalDate
+      AND (a.ValidToLocalDate IS NULL OR NEW.AttendanceLocalDate<a.ValidToLocalDate)
+  );
+END;
+
+CREATE TRIGGER IF NOT EXISTS TR_0203_Attendance_ValidDate_Update
+BEFORE UPDATE OF AttendanceLocalDate, AssignmentIdAtEffectiveDate ON AttendanceRecords
+BEGIN
+  SELECT RAISE(ABORT,'Invalid attendance business date')
+  WHERE length(NEW.AttendanceLocalDate) <> 10
+    OR NEW.AttendanceLocalDate NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+    OR date(NEW.AttendanceLocalDate,'+0 days') IS NULL
+    OR date(NEW.AttendanceLocalDate,'+0 days')<>NEW.AttendanceLocalDate;
+  SELECT RAISE(ABORT,'Attendance is outside the effective assignment interval')
+  WHERE NOT EXISTS (
+    SELECT 1 FROM PersonAssignments a
+    WHERE a.AssignmentId=NEW.AssignmentIdAtEffectiveDate
+      AND a.PersonId=NEW.PersonId AND a.SiteId=NEW.SiteIdAtEffectiveDate
+      AND a.ValidFromLocalDate<=NEW.AttendanceLocalDate
+      AND (a.ValidToLocalDate IS NULL OR NEW.AttendanceLocalDate<a.ValidToLocalDate)
+  );
+END;
