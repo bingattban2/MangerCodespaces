@@ -387,10 +387,17 @@ public sealed class SqlitePersonIdentityStore : IPersonIdentityStore
             return ServiceResult<PersonHistoricIdentityDto>.Fail(BridgeErrorCodes.StorageBusy,
                 "قاعدة البيانات مشغولة، حاول مجدداً.", ex.Message);
         }
-        catch (SqliteException ex) when (ex.SqliteErrorCode == 19)
+        catch (SqliteException ex) when (ex.SqliteErrorCode == 19 &&
+            ex.SqliteExtendedErrorCode == 2067 &&
+            ex.Message.Contains("Persons.NormalizedServiceNumberA", StringComparison.Ordinal))
         {
             return ServiceResult<PersonHistoricIdentityDto>.Fail(BridgeErrorCodes.DuplicateServiceNumber,
-                "الرقم (ع) مستخدم بالفعل أو تم رفض التعديل بسبب قيود البيانات.", ex.Message);
+                "الرقم (ع) مستخدم بالفعل في القوة الفعالة.", ex.Message);
+        }
+        catch (SqliteException ex) when (ex.SqliteErrorCode == 19)
+        {
+            return ServiceResult<PersonHistoricIdentityDto>.Fail(BridgeErrorCodes.ValidationError,
+                "رفضت قاعدة البيانات تعديل الهوية بسبب قيد سلامة البيانات.", ex.Message);
         }
         catch (SqliteException ex)
         {
