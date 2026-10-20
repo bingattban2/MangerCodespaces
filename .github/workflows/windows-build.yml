@@ -66,11 +66,20 @@ jobs:
           path: source
           persist-credentials: false
           fetch-depth: 0
+      - name: Require read-only access to private verification repository
+        shell: pwsh
+        env:
+          PRIVATE_VERIFIER_READ_TOKEN: ${{ secrets.ALTAMAM_VERIFIER_READ_TOKEN }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:PRIVATE_VERIFIER_READ_TOKEN)) {
+            throw 'Missing ALTAMAM_VERIFIER_READ_TOKEN. Create a fine-grained token restricted to private AlTamam-External-Verification with Contents: Read-only and store it as a production Actions secret. The gate must not be skipped.'
+          }
       - name: Checkout independently reviewed external verification
         uses: actions/checkout@v4
         with:
           repository: bingattban2/AlTamam-External-Verification
           ref: e011cac6f91be3197b084c5c0087aa1163890aec
+          token: ${{ secrets.ALTAMAM_VERIFIER_READ_TOKEN }}
           path: verifier
           persist-credentials: false
       - name: Install .NET 10 for independent tests
