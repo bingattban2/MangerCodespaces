@@ -373,6 +373,38 @@ jobs:
             throw 'Missing real Windows DPAPI and encrypted recovery evidence'
           }
           Write-Host "PHASE02_SECURITY_MIGRATIONS=PASS; source=$sha; cases=15"
+      - name: Consolidate single comprehensive Phase 02 acceptance evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $source=Join-Path $env:GITHUB_WORKSPACE 'source'
+          $out=Join-Path $env:GITHUB_WORKSPACE 'independent-phase02-evidence'
+          $sha=(& git -C $source rev-parse HEAD).Trim()
+          $specs=@(
+            @('identity-results.json','productionCommit','status','PASS'),
+            @('resilience-results.json','productionSha','status','PASS'),
+            @('schema-constraints.json','productionSha','status','PASS'),
+            @('temporal-results.json','sourceSha','status','PASS'),
+            @('security-migrations.json','sourceSha','status','PASS'),
+            @('independent-process-restart.json','productionSha','result','PASS')
+          )
+          $components=@()
+          foreach($spec in $specs){
+            $proof=Get-Content (Join-Path $out $spec[0]) -Raw|ConvertFrom-Json
+            if($proof.($spec[1]) -ne $sha -or $proof.($spec[2]) -ne $spec[3]){
+              throw "Phase 02 comprehensive gate rejected component $($spec[0])"
+            }
+            $components+=@{file=$spec[0];result='PASS';sourceSha=$sha}
+          }
+          [ordered]@{
+            phase='02';status='PASS';productionSha=$sha
+            components=$components
+            windowsRestoreAndBuild='PASS'
+            inheritedRegressionAndProjectGraph='PASS'
+            uiChanges='NONE; Phase 02 owns no screens'
+            applicationReleaseEligible=$false
+          }|ConvertTo-Json -Depth 6|Set-Content (Join-Path $out 'phase02-comprehensive.json')
+          Write-Host "PHASE02_COMPREHENSIVE_EXTERNAL=PASS; source=$sha"
       - name: Upload isolated verification logs
         if: always()
         uses: actions/upload-artifact@v4
