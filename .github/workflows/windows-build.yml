@@ -5,6 +5,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+concurrency:
+  group: windows-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -18,6 +22,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: source
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - name: Install .NET 10
         uses: actions/setup-dotnet@v4
@@ -95,6 +100,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: source
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
           fetch-depth: 0
       - name: Require read-only access to private verification repository
@@ -109,7 +115,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: bingattban2/AlTamam-External-Verification
-          ref: fbe75f9294d7c009120bd08afdae1df1d5c1ebe3
+          ref: 38c9f260fd0ff4f9203bf950eb048bfc493dc5d8
           token: ${{ secrets.ALTAMAM_VERIFIER_READ_TOKEN }}
           path: verifier
           persist-credentials: false
@@ -127,7 +133,7 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $sha.Length -ne 40) { throw 'Production checkout lacks a valid source SHA' }
           Write-Host "VERIFIED_PRODUCTION_SHA=$sha"
           $approvedVerifier = (& git -C $verifier rev-parse HEAD).Trim()
-          if ($approvedVerifier -ne 'fbe75f9294d7c009120bd08afdae1df1d5c1ebe3') { throw 'External verifier checkout does not match approved SHA' }
+          if ($approvedVerifier -ne '38c9f260fd0ff4f9203bf950eb048bfc493dc5d8') { throw 'External verifier checkout does not match approved SHA' }
           & (Join-Path $verifier 'verify_phase01_current_regression.ps1') -RepositoryRoot $source -ResultsDirectory $output -ExpectedCommit $sha
           if ($LASTEXITCODE -ne 0) { throw "Current production regression failed: exit $LASTEXITCODE" }
       - name: Reverify project graph and conservative cleanup independently
@@ -405,6 +411,26 @@ jobs:
             applicationReleaseEligible=$false
           }|ConvertTo-Json -Depth 6|Set-Content (Join-Path $out 'phase02-comprehensive.json')
           Write-Host "PHASE02_COMPREHENSIVE_EXTERNAL=PASS; source=$sha"
+      - name: Run single comprehensive Phase 03 authentication acceptance
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $source=Join-Path $env:GITHUB_WORKSPACE 'source'
+          $verifier=Join-Path $env:GITHUB_WORKSPACE 'verifier'
+          $out=Join-Path $env:GITHUB_WORKSPACE 'independent-phase03-evidence'
+          [IO.Directory]::CreateDirectory($out)|Out-Null
+          $sha=(& git -C $source rev-parse HEAD).Trim()
+          $env:AlTamamRepoRoot=$source
+          $runner=Join-Path $verifier 'Phase03AuthenticationRunner/Phase03AuthenticationRunner.csproj'
+          & dotnet run --project $runner -c Release -- (Join-Path $out 'phase03-comprehensive.json') $sha *>&1 |
+            Tee-Object -FilePath (Join-Path $out 'phase03-comprehensive.log')
+          if($LASTEXITCODE -ne 0){throw 'Phase 03 authentication acceptance failed'}
+          $proof=Get-Content (Join-Path $out 'phase03-comprehensive.json') -Raw|ConvertFrom-Json
+          if($proof.status -ne 'PASS' -or $proof.sourceSha -ne $sha -or
+             $proof.isWindows -ne $true -or @($proof.checks).Count -ne 27 -or @($proof.failures).Count -ne 0){
+            throw 'Missing exact-commit persisted authentication and permission evidence'
+          }
+          Write-Host "PHASE03_COMPREHENSIVE_EXTERNAL=PASS; source=$sha; cases=27"
       - name: Upload isolated verification logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -414,4 +440,5 @@ jobs:
             independent-evidence/
             independent-graph-evidence/
             independent-phase02-evidence/
+            independent-phase03-evidence/
           if-no-files-found: warn

@@ -2,7 +2,7 @@
 
 This repository contains the production foundation only: `Domain`, `Contracts`, `Application`, and `Infrastructure` for an offline Windows personnel/attendance system.
 
-It contains the **original local HTML/CSS screen layouts** in `src/AlTamam.WebUI`, restored from the earlier complete repository, while retaining the four-layer core. There is **no WPF/WebView2 executable host yet, no implemented business-action bridge, no generated employee data and no automated test project**. Existing pages preserve their original visual baseline; their data operations must be completed in the designated implementation stages. Successful compilation of the foundation does **not** mean that personnel management, authentication, attendance, transfer, or backup features are implemented or verified.
+It contains the **original local HTML/CSS screen layouts** in `src/AlTamam.WebUI`, restored from the earlier complete repository, while retaining the four-layer core. There is **no WPF/WebView2 executable host yet, no implemented business-action bridge, no generated employee data and no automated test project**. Existing pages preserve their original visual baseline; their data operations must be completed in the designated implementation stages. Successful compilation of the foundation does **not** mean that personnel management, Windows login UI, attendance, transfer, or backup workflows are implemented or verified.
 
 Build on Windows using .NET SDK 10:
 
@@ -32,3 +32,9 @@ The canonical offline virtual host is `https://manger.adwas.example/`, declared 
 The `.example` suffix is reserved; use `CoreWebView2HostResourceAccessKind.Deny`
 when the future WPF/WebView2 host maps this origin to `src/AlTamam.WebUI`.
 **The current repository contains no Windows executable host or functional C# UI bridge yet.**
+
+## Encrypted storage and authentication API
+
+Installation keys are generated with cryptographic randomness and protected for the current Windows user by `WindowsDatabaseKeyStore`. Missing or damaged keys fail closed. Legacy schema hardening first creates a verified encrypted SQLite online recovery snapshot and records migration component checksums.
+
+`AuthenticationService` and `SqliteAuthenticationStore` provide atomic first-run enrollment of `adwas` with a user-chosen password, Argon2id credential verification, persisted lockout and expiring/revocable sessions, role-checked account creation, password changes and account deactivation. Accounts other than the initial administrator must link to active roster members. Credential hashes, salts and session tokens are never included in account-list DTOs or audit descriptions. These APIs require integration with the Windows host before the application can be distributed.
