@@ -34,8 +34,6 @@ public sealed class AlTamamDbContext : IDisposable
         {
             DataSource = _databasePath,
             Mode = SqliteOpenMode.ReadWriteCreate,
-            Password = _databaseKey,
-            ForeignKeys = true,
             Pooling = false,
             DefaultTimeout = 15
         };
@@ -43,6 +41,13 @@ public sealed class AlTamamDbContext : IDisposable
         try
         {
             connection.Open();
+            // Apply the validated hex passphrase AFTER Open owns the native handle.
+            // Microsoft.Data.Sqlite 9 initializes Password inside its internal constructor;
+            // a wrong key there can throw before the outer connection owns the handle.
+            // Opening first guarantees Dispose closes that handle on every failure path.
+            using var keyCommand = connection.CreateCommand();
+            keyCommand.CommandText = "PRAGMA key = '" + _databaseKey + "';";
+            keyCommand.ExecuteNonQuery();
             using var cipher = connection.CreateCommand();
             cipher.CommandText = "PRAGMA cipher_version;";
             if (string.IsNullOrWhiteSpace(cipher.ExecuteScalar()?.ToString()))
