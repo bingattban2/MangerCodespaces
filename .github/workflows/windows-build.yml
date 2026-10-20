@@ -109,7 +109,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: bingattban2/AlTamam-External-Verification
-          ref: 574bc12fe8c1310501a21eb522a83f118444f65c
+          ref: fbe75f9294d7c009120bd08afdae1df1d5c1ebe3
           token: ${{ secrets.ALTAMAM_VERIFIER_READ_TOKEN }}
           path: verifier
           persist-credentials: false
@@ -127,7 +127,7 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $sha.Length -ne 40) { throw 'Production checkout lacks a valid source SHA' }
           Write-Host "VERIFIED_PRODUCTION_SHA=$sha"
           $approvedVerifier = (& git -C $verifier rev-parse HEAD).Trim()
-          if ($approvedVerifier -ne '574bc12fe8c1310501a21eb522a83f118444f65c') { throw 'External verifier checkout does not match approved SHA' }
+          if ($approvedVerifier -ne 'fbe75f9294d7c009120bd08afdae1df1d5c1ebe3') { throw 'External verifier checkout does not match approved SHA' }
           & (Join-Path $verifier 'verify_phase01_current_regression.ps1') -RepositoryRoot $source -ResultsDirectory $output -ExpectedCommit $sha
           if ($LASTEXITCODE -ne 0) { throw "Current production regression failed: exit $LASTEXITCODE" }
       - name: Reverify project graph and conservative cleanup independently
@@ -369,10 +369,10 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Encryption key or safe migration acceptance failed'}
           $proof=Get-Content (Join-Path $out 'security-migrations.json') -Raw|ConvertFrom-Json
           if($proof.status -ne 'PASS' -or $proof.sourceSha -ne $sha -or
-             @($proof.cases).Count -ne 14 -or @($proof.failures).Count -ne 0){
+             @($proof.cases).Count -ne 15 -or @($proof.failures).Count -ne 0){
             throw 'Missing real Windows DPAPI and encrypted recovery evidence'
           }
-          Write-Host "PHASE02_SECURITY_MIGRATIONS=PASS; source=$sha; cases=14"
+          Write-Host "PHASE02_SECURITY_MIGRATIONS=PASS; source=$sha; cases=15"
       - name: Upload isolated verification logs
         if: always()
         uses: actions/upload-artifact@v4
