@@ -78,7 +78,7 @@ public sealed class SqliteAuthenticationStore(AlTamamDbContext database, ISystem
                 INSERT INTO UserRoleHistory(UserId,OldRole,NewRole,ChangedByUserId,ChangedAtUtc) VALUES($id,NULL,1,$id,$now);
                 """,("$id",id),("$hash",hashed.HashBase64),("$salt",hashed.SaltBase64),("$now",Now)).ConfigureAwait(false);
             var user=(await FindAsync(c,t,id).ConfigureAwait(false))!.Account;
-            await AuditAsync(c,t,user,"AUTH_ENROLL",id,"تأسيس حساب الإدارة العامة",null,new{username=user.Username,role=user.Role},command.RequestId).ConfigureAwait(false);
+            await AuditAsync(c,t,user,"AUTH_ENROLL",id,"تأسيس حساب الإدارة العامة",null,new{username=user.Username,role=user.Role,recoveryAcknowledged=command.RecoveryAcknowledged},command.RequestId).ConfigureAwait(false);
             return ServiceResult<AccountDto>.Ok(user);
         },cancellationToken).ConfigureAwait(false);
     });

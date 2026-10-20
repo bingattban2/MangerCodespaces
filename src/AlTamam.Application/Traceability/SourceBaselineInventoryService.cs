@@ -104,8 +104,7 @@ public sealed class SourceBaselineInventoryService
             }
         }
 
-        bool isClean = !hasExecutableHost
-            && !hasObsoleteDemos
+        bool isClean = !hasObsoleteDemos
             && !hasHiddenAccounts
             && !hasBrokenReferences
             && violations.Count == 0;
@@ -285,7 +284,11 @@ public sealed class SourceBaselineInventoryService
                 string.Equals(useWpf, "true", StringComparison.OrdinalIgnoreCase))
             {
                 hasExecutableHost = true;
-                violations.Add($"تم رصد مشروع مضيف تنفيذي غير متوقع في خط الأساس: {csprojRelPath}");
+                bool approvedDesktop = csprojRelPath == "src/AlTamam.Desktop/AlTamam.Desktop.csproj"
+                    && string.Equals(outputType,"WinExe",StringComparison.Ordinal)
+                    && string.Equals(useWpf,"true",StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(tfm,"net10.0-windows",StringComparison.Ordinal);
+                if(!approvedDesktop)violations.Add($"تم رصد مشروع مضيف تنفيذي غير معتمد: {csprojRelPath}");
             }
 
             var csprojDir = Path.GetDirectoryName(csprojFullPath)!;

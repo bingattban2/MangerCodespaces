@@ -2265,6 +2265,30 @@
           "payload"
         ]
       }
+    },
+    {
+      "action": "CompleteProvisioning",
+      "owningService": "AuthenticationService",
+      "allowedRoles": [
+        "Unauthenticated"
+      ],
+      "isMutating": true,
+      "idempotentByRequestId": true,
+      "errorCodes": [
+        "ValidationError",
+        "ConflictStale",
+        "ClockRollbackSuspected"
+      ],
+      "requestSchema": {
+        "type": "object",
+        "required": [
+          "requestId",
+          "protocolVersion",
+          "action",
+          "sessionNonce",
+          "payload"
+        ]
+      }
     }
   ]
 }

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework><UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting><RootNamespace>AlTamam.Desktop</RootNamespace>
+    <AssemblyName>AlTamam</AssemblyName><ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../AlTamam.Domain/AlTamam.Domain.csproj" />
+    <ProjectReference Include="../AlTamam.Contracts/AlTamam.Contracts.csproj" />
+    <ProjectReference Include="../AlTamam.Application/AlTamam.Application.csproj" />
+    <ProjectReference Include="../AlTamam.Infrastructure/AlTamam.Infrastructure.csproj" />
+    <PackageReference Include="Microsoft.Web.WebView2" />
+    <Content Include="../AlTamam.WebUI/**" Link="WebUI/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

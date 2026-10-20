@@ -83,8 +83,8 @@ public sealed class RequirementTraceabilityService
 
     public static readonly IReadOnlyList<string> CanonicalActions = new[]
     {
-        // AuthenticationService (6)
-        "GetProvisioningState", "AuthenticateLocalUser", "GetCurrentSession",
+        // AuthenticationService (7)
+        "GetProvisioningState", "CompleteProvisioning", "AuthenticateLocalUser", "GetCurrentSession",
         "GetNavigationPermissions", "Logout", "GetAllowedRoles",
         // DashboardService (4)
         "GetDashboardSummary", "QueryDailyRoster", "QueryUnprepared", "GetAutoAttendanceRun",
@@ -174,7 +174,7 @@ public sealed class RequirementTraceabilityService
             OwningServices: new[] { "AuthenticationService" },
             BridgeActions: new[]
             {
-                "GetProvisioningState", "AuthenticateLocalUser", "GetCurrentSession",
+                "GetProvisioningState", "CompleteProvisioning", "AuthenticateLocalUser", "GetCurrentSession",
                 "GetNavigationPermissions", "Logout", "GetAllowedRoles"
             },
             ScreenRouteKeys: new[] { "FirstRunSetup", "Login", "Logout" },

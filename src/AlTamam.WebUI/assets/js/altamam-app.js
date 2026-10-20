@@ -75,3 +75,5 @@ document.addEventListener('click', function (event) {
     case 'navigateTop': navigateTop(control.dataset.section); break;
   }
 });
+
+window.addEventListener("DOMContentLoaded",async()=>{if(!window.AlTamamBridge?.connected)return;try{const state=await AlTamamBridge.call("GetProvisioningState");if(state.needsEnrollment){location.replace("screens/SharedScreens/FirstRunSetup/index.html");return;}const current=await AlTamamBridge.session();document.getElementById("headerRoleBadge").textContent=current.account.username+" — "+({1:"الإدارة العامة",2:"الإدارة العادية",3:"مشرف"}[current.account.role]);}catch(error){if(error.code==="Unauthorized"||error.code==="SessionExpired")location.replace("screens/SharedScreens/Login/index.html");else document.getElementById("appViewport").textContent=error.message;}});
