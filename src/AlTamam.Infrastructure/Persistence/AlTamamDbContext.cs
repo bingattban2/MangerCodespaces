@@ -164,6 +164,49 @@ public sealed class AlTamamDbContext : IDisposable
                 guards.CommandText = guardsSql;
                 await guards.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
+            // 02.03 preflight does not migrate or alter historical snapshots. Existing
+            // contradictions require an explicit, separately approved safe repair in 02.05.
+            using (var temporalPreflight = connection.CreateCommand())
+            {
+                temporalPreflight.Transaction = transaction;
+                temporalPreflight.CommandText = """
+                    SELECT
+                      (SELECT COUNT(*) FROM PersonIdentityHistory t WHERE (length(t.ValidFromLocalDate)<>10 OR t.ValidFromLocalDate NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' OR date(t.ValidFromLocalDate,'+0 days') IS NULL OR date(t.ValidFromLocalDate,'+0 days')<>t.ValidFromLocalDate) OR (t.ValidToLocalDate IS NOT NULL AND ((length(t.ValidToLocalDate)<>10 OR t.ValidToLocalDate NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' OR date(t.ValidToLocalDate,'+0 days') IS NULL OR date(t.ValidToLocalDate,'+0 days')<>t.ValidToLocalDate) OR t.ValidToLocalDate<=t.ValidFromLocalDate)))
+                      +
+                      (SELECT COUNT(*) FROM PersonIdentityHistory a JOIN PersonIdentityHistory b ON a.PersonId=b.PersonId AND a.HistoryId<b.HistoryId AND (a.ValidToLocalDate IS NULL OR b.ValidFromLocalDate<a.ValidToLocalDate) AND (b.ValidToLocalDate IS NULL OR a.ValidFromLocalDate<b.ValidToLocalDate))
+                      +
+                      (SELECT COUNT(*) FROM SiteNameHistory t WHERE (length(t.ValidFromLocalDate)<>10 OR t.ValidFromLocalDate NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' OR date(t.ValidFromLocalDate,'+0 days') IS NULL OR date(t.ValidFromLocalDate,'+0 days')<>t.ValidFromLocalDate) OR (t.ValidToLocalDate IS NOT NULL AND ((length(t.ValidToLocalDate)<>10 OR t.ValidToLocalDate NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' OR date(t.ValidToLocalDate,'+0 days') IS NULL OR date(t.ValidToLocalDate,'+0 days')<>t.ValidToLocalDate) OR t.ValidToLocalDate<=t.ValidFromLocalDate)))
+                      +
+                      (SELECT COUNT(*) FROM SiteNameHistory a JOIN SiteNameHistory b ON a.SiteId=b.SiteId AND a.HistoryId<b.HistoryId AND (a.ValidToLocalDate IS NULL OR b.ValidFromLocalDate<a.ValidToLocalDate) AND (b.ValidToLocalDate IS NULL OR a.ValidFromLocalDate<b.ValidToLocalDate))
+                      +
+                      (SELECT COUNT(*) FROM AttendanceStatusNameHistory t WHERE (length(t.ValidFromLocalDate)<>10 OR t.ValidFromLocalDate NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' OR date(t.ValidFromLocalDate,'+0 days') IS NULL OR date(t.ValidFromLocalDate,'+0 days')<>t.ValidFromLocalDate) OR (t.ValidToLocalDate IS NOT NULL AND ((length(t.ValidToLocalDate)<>10 OR t.ValidToLocalDate NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' OR date(t.ValidToLocalDate,'+0 days') IS NULL OR date(t.ValidToLocalDate,'+0 days')<>t.ValidToLocalDate) OR t.ValidToLocalDate<=t.ValidFromLocalDate)))
+                      +
+                      (SELECT COUNT(*) FROM AttendanceStatusNameHistory a JOIN AttendanceStatusNameHistory b ON a.StatusId=b.StatusId AND a.HistoryId<b.HistoryId AND (a.ValidToLocalDate IS NULL OR b.ValidFromLocalDate<a.ValidToLocalDate) AND (b.ValidToLocalDate IS NULL OR a.ValidFromLocalDate<b.ValidToLocalDate))
+                      +
+                      (SELECT COUNT(*) FROM PersonAssignments t WHERE (length(t.ValidFromLocalDate)<>10 OR t.ValidFromLocalDate NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' OR date(t.ValidFromLocalDate,'+0 days') IS NULL OR date(t.ValidFromLocalDate,'+0 days')<>t.ValidFromLocalDate) OR (t.ValidToLocalDate IS NOT NULL AND ((length(t.ValidToLocalDate)<>10 OR t.ValidToLocalDate NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' OR date(t.ValidToLocalDate,'+0 days') IS NULL OR date(t.ValidToLocalDate,'+0 days')<>t.ValidToLocalDate) OR t.ValidToLocalDate<=t.ValidFromLocalDate)))
+                      +
+                      (SELECT COUNT(*) FROM PersonAssignments a JOIN PersonAssignments b ON a.PersonId=b.PersonId AND a.AssignmentId<b.AssignmentId AND (a.ValidToLocalDate IS NULL OR b.ValidFromLocalDate<a.ValidToLocalDate) AND (b.ValidToLocalDate IS NULL OR a.ValidFromLocalDate<b.ValidToLocalDate))
+                      +
+                      (SELECT COUNT(*) FROM AttendanceRecords a JOIN PersonAssignments p ON p.AssignmentId=a.AssignmentIdAtEffectiveDate WHERE (length(a.AttendanceLocalDate)<>10 OR a.AttendanceLocalDate NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' OR date(a.AttendanceLocalDate,'+0 days') IS NULL OR date(a.AttendanceLocalDate,'+0 days')<>a.AttendanceLocalDate) OR a.AttendanceLocalDate < p.ValidFromLocalDate OR (p.ValidToLocalDate IS NOT NULL AND a.AttendanceLocalDate >= p.ValidToLocalDate));
+                    """;
+                var conflicts = Convert.ToInt64(await temporalPreflight.ExecuteScalarAsync(cancellationToken)
+                    .ConfigureAwait(false));
+                if (conflicts != 0)
+                    throw new InvalidOperationException(
+                        $"Existing encrypted history contains {conflicts} invalid/overlapping effective-date relationships; original data preserved.");
+            }
+            var temporalResource = typeof(AlTamamDbContext).Assembly.GetManifestResourceStream(
+                "AlTamam.Infrastructure.Persistence.Migrations.V001_TemporalGuards.sql")
+                ?? throw new InvalidOperationException("Required additive 02.03 temporal guards are missing.");
+            await using (temporalResource)
+            using (var reader = new StreamReader(temporalResource))
+            {
+                var sql = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+                using var guard = connection.CreateCommand();
+                guard.Transaction = transaction;
+                guard.CommandText = sql;
+                await guard.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         finally { _writeGate.Release(); }
