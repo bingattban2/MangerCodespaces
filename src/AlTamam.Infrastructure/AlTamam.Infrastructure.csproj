@@ -13,5 +13,6 @@
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlcipher" />
     <PackageReference Include="Konscious.Security.Cryptography.Argon2" />
     <EmbeddedResource Include="Persistence/Migrations/V001_InitialSchema.sql" />
+    <EmbeddedResource Include="Persistence/Migrations/V001_RelationalGuards.sql" />
   </ItemGroup>
 </Project>
