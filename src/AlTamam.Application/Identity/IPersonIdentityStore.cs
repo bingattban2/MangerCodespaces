@@ -16,6 +16,12 @@ public interface IPersonIdentityStore
     Task<ServiceResult<PersonHistoricIdentityDto>> ReadAsOfAsync(
         PersonId personId, DateOnly businessDate, string sessionNonce,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Returns only persisted attendance days for the requested month with
+    /// the names/numbers/site/status snapshots in effect on each original day.</summary>
+    Task<ServiceResult<IReadOnlyList<HistoricAttendanceDayDto>>> ReadMonthlyHistoryAsync(
+        PersonId personId, int year, int month, string sessionNonce,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed record PersonIdentityChange(

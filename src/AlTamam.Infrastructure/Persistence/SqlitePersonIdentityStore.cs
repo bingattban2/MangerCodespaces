@@ -75,11 +75,17 @@ public sealed class SqlitePersonIdentityStore : IPersonIdentityStore
         command.Transaction = transaction;
         command.CommandText = """
             SELECT h.ValidFromLocalDate, h.NameSnapshot, h.ServiceNumberASnapshot,
-                   (SELECT MIN(n.ValidFromLocalDate) FROM PersonIdentityHistory n
-                    WHERE n.PersonId = h.PersonId
-                      AND n.ValidFromLocalDate > h.ValidFromLocalDate) AS NextDate
+                   COALESCE(
+                       (SELECT MIN(n.ValidFromLocalDate) FROM PersonIdentityHistory n
+                        WHERE n.PersonId = h.PersonId
+                          AND n.ValidFromLocalDate > h.ValidFromLocalDate
+                          AND (h.ValidToLocalDate IS NULL OR
+                               n.ValidFromLocalDate < h.ValidToLocalDate)),
+                       h.ValidToLocalDate
+                   ) AS NextDate
             FROM PersonIdentityHistory h
             WHERE h.PersonId = $person AND h.ValidFromLocalDate <= $day
+              AND (h.ValidToLocalDate IS NULL OR h.ValidToLocalDate > $day)
             ORDER BY h.ValidFromLocalDate DESC, h.HistoryId DESC
             LIMIT 1;
             """;
@@ -118,10 +124,105 @@ public sealed class SqlitePersonIdentityStore : IPersonIdentityStore
         }
     }
 
+    public async Task<ServiceResult<IReadOnlyList<HistoricAttendanceDayDto>>> ReadMonthlyHistoryAsync(
+        PersonId personId, int year, int month, string sessionNonce,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(personId.Value) || string.IsNullOrWhiteSpace(sessionNonce) ||
+            year is < 1 or > 9999 || month is < 1 or > 12)
+            return ServiceResult<IReadOnlyList<HistoricAttendanceDayDto>>.Fail(
+                BridgeErrorCodes.ValidationError, "بيانات استعلام التمام الشهري غير صحيحة.");
+
+        try
+        {
+            using var connection = _db.CreateOpenConnection();
+            if (await GetAuthorizedActorAsync(connection, null, sessionNonce, cancellationToken).ConfigureAwait(false) is null)
+                return ServiceResult<IReadOnlyList<HistoricAttendanceDayDto>>.Fail(
+                    BridgeErrorCodes.Unauthorized, "الجلسة غير صالحة أو انتهت صلاحيتها.");
+
+            var first = new DateOnly(year, month, 1);
+            var last = new DateOnly(year, month, DateTime.DaysInMonth(year, month));
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT a.PersonId, h.NameSnapshot, h.ServiceNumberASnapshot,
+                       a.AttendanceLocalDate, a.StatusId, a.StatusNameSnapshot,
+                       a.StatusSymbolSnapshot, a.StatusColorSnapshot,
+                       a.AssignmentIdAtEffectiveDate, a.SiteIdAtEffectiveDate,
+                       a.SiteNameSnapshot, p.SourceMovementId, a.RevisionNumber
+                FROM AttendanceRecords a
+                JOIN PersonAssignments p ON p.AssignmentId = a.AssignmentIdAtEffectiveDate
+                LEFT JOIN PersonIdentityHistory h ON h.HistoryId = (
+                    SELECT history.HistoryId FROM PersonIdentityHistory history
+                    WHERE history.PersonId = a.PersonId
+                      AND history.ValidFromLocalDate <= a.AttendanceLocalDate
+                      AND (history.ValidToLocalDate IS NULL OR
+                           history.ValidToLocalDate > a.AttendanceLocalDate)
+                    ORDER BY history.ValidFromLocalDate DESC, history.HistoryId DESC
+                    LIMIT 1
+                )
+                WHERE a.PersonId = $person AND a.AttendanceLocalDate >= $from
+                  AND a.AttendanceLocalDate <= $through
+                ORDER BY a.AttendanceLocalDate;
+                """;
+            command.Parameters.AddWithValue("$person", personId.Value);
+            command.Parameters.AddWithValue("$from", ToIso(first));
+            command.Parameters.AddWithValue("$through", ToIso(last));
+            var days = new List<HistoricAttendanceDayDto>();
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                if (reader.IsDBNull(1) || reader.IsDBNull(2))
+                    return ServiceResult<IReadOnlyList<HistoricAttendanceDayDto>>.Fail(
+                        BridgeErrorCodes.MissingData,
+                        "تاريخ هوية فرد في سجل التمام غير مكتمل، ولا يمكن إظهار اسم حالي بديل.");
+                days.Add(new HistoricAttendanceDayDto(
+                    PersonId: reader.GetString(0),
+                    PersonNameSnapshot: reader.GetString(1),
+                    ServiceNumberASnapshot: reader.GetString(2),
+                    BusinessDate: reader.GetString(3),
+                    StatusId: reader.GetString(4),
+                    StatusNameSnapshot: reader.GetString(5),
+                    StatusSymbolSnapshot: reader.GetString(6),
+                    StatusColorSnapshot: reader.GetString(7),
+                    AssignmentIdAtEffectiveDate: reader.GetString(8),
+                    SiteIdAtEffectiveDate: reader.GetString(9),
+                    SiteNameSnapshot: reader.GetString(10),
+                    SourceMovementId: reader.IsDBNull(11) ? null : reader.GetString(11),
+                    RevisionNumber: reader.GetInt32(12)));
+            }
+            return ServiceResult<IReadOnlyList<HistoricAttendanceDayDto>>.Ok(days);
+        }
+        catch (SqliteException ex) when (ex.SqliteErrorCode is 5 or 6)
+        {
+            return ServiceResult<IReadOnlyList<HistoricAttendanceDayDto>>.Fail(
+                BridgeErrorCodes.StorageBusy, "قاعدة البيانات مشغولة، حاول مجدداً.", ex.Message);
+        }
+        catch (SqliteException ex)
+        {
+            return ServiceResult<IReadOnlyList<HistoricAttendanceDayDto>>.Fail(
+                BridgeErrorCodes.BackupIntegrityFailed, "تعذر قراءة سجل التمام التاريخي من قاعدة البيانات المشفرة.", ex.Message);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return ServiceResult<IReadOnlyList<HistoricAttendanceDayDto>>.Fail(
+                BridgeErrorCodes.BackupIntegrityFailed, "تعذر فتح بيانات التمام التاريخية.", ex.Message);
+        }
+    }
+
     public async Task<ServiceResult<PersonHistoricIdentityDto>> ChangeAsync(
         PersonIdentityChange change, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(change);
+        if (change.EffectiveLocalDate != _clock.CurrentBusinessDate ||
+            string.IsNullOrWhiteSpace(change.PersonId.Value) ||
+            string.IsNullOrWhiteSpace(change.VisibleName) ||
+            string.IsNullOrWhiteSpace(change.ServiceNumberA) ||
+            string.IsNullOrWhiteSpace(change.Reason) ||
+            string.IsNullOrWhiteSpace(change.RequestId) ||
+            string.IsNullOrWhiteSpace(change.SessionNonce) ||
+            change.ExpectedRowVersion < 1)
+            return ServiceResult<PersonHistoricIdentityDto>.Fail(
+                BridgeErrorCodes.ValidationError, "بيانات تغيير الهوية غير مكتملة أو تاريخ سريانها غير مسموح.");
         try
         {
             // Auth, optimistic concurrency, immutable snapshot insert, and audit share ONE transaction.
@@ -144,7 +245,7 @@ public sealed class SqlitePersonIdentityStore : IPersonIdentityStore
                 {
                     replay.Transaction = transaction;
                     replay.CommandText = """
-                        SELECT OperationCode, ActorUserId, TargetEntityId, NewValueJson
+                        SELECT OperationCode, ActorUserId, TargetEntityId, NewValueJson, Reason
                         FROM AuditEvents WHERE CorrelationId = $id LIMIT 1;
                         """;
                     replay.Parameters.AddWithValue("$id", change.RequestId);
@@ -154,7 +255,8 @@ public sealed class SqlitePersonIdentityStore : IPersonIdentityStore
                         if (existing.GetString(0) != "PERSON_IDENTITY_UPDATED" ||
                             existing.GetString(1) != actor.Id.Value ||
                             existing.GetString(2) != change.PersonId.Value ||
-                            existing.IsDBNull(3) || existing.GetString(3) != proposedJson)
+                            existing.IsDBNull(3) || existing.GetString(3) != proposedJson ||
+                            existing.IsDBNull(4) || existing.GetString(4) != change.Reason)
                             return ServiceResult<PersonHistoricIdentityDto>.Fail(
                                 BridgeErrorCodes.ConflictStale, "معرف الطلب مستخدم لعملية مختلفة.");
                         var original = await LoadIdentityAsync(connection, transaction,
@@ -277,6 +379,18 @@ public sealed class SqlitePersonIdentityStore : IPersonIdentityStore
         {
             return ServiceResult<PersonHistoricIdentityDto>.Fail(BridgeErrorCodes.DuplicateServiceNumber,
                 "الرقم (ع) مستخدم بالفعل أو تم رفض التعديل بسبب قيود البيانات.", ex.Message);
+        }
+        catch (SqliteException ex)
+        {
+            return ServiceResult<PersonHistoricIdentityDto>.Fail(
+                BridgeErrorCodes.BackupIntegrityFailed,
+                "تعذر تنفيذ تعديل الهوية بسبب خطأ في قاعدة البيانات المشفرة.", ex.Message);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return ServiceResult<PersonHistoricIdentityDto>.Fail(
+                BridgeErrorCodes.BackupIntegrityFailed,
+                "تعذر إتمام معاملة الهوية المشفرة.", ex.Message);
         }
     }
 }

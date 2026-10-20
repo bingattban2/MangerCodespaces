@@ -53,6 +53,22 @@ public sealed class PersonIdentityService
         }, cancellationToken);
     }
 
+    /// <summary>
+    /// Read the actual encrypted attendance rows for a month with historical labels,
+    /// never substituting mutable current names, site labels or status labels.
+    /// </summary>
+    public Task<ServiceResult<IReadOnlyList<HistoricAttendanceDayDto>>> ReadMonthlyHistoryAsync(
+        PersonId personId, int year, int month, string sessionNonce,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(personId.Value) ||
+            string.IsNullOrWhiteSpace(sessionNonce) || year is < 1 or > 9999 ||
+            month is < 1 or > 12)
+            return Task.FromResult(ServiceResult<IReadOnlyList<HistoricAttendanceDayDto>>.Fail(
+                BridgeErrorCodes.ValidationError, "معرف الفرد والجلسة والشهر والسنة مطلوبة وصحيحة."));
+        return _store.ReadMonthlyHistoryAsync(personId, year, month, sessionNonce, cancellationToken);
+    }
+
     public Task<ServiceResult<PersonHistoricIdentityDto>> ReadAsOfAsync(
         PersonId personId, DateOnly businessDate, string sessionNonce,
         CancellationToken cancellationToken = default)
