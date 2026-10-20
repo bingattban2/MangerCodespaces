@@ -40,9 +40,10 @@ public sealed class SqliteAuthenticationStore(AlTamamDbContext database, ISystem
             SELECT u.UserId,s.IssuedAtUtc,s.ExpiresAtUtc FROM UserSessions s JOIN Users u ON u.UserId=s.UserId
             WHERE s.SessionNonce=$nonce AND s.RevokedFlag=0 AND u.ActiveFlag=1
               AND u.RequiresFirstRunSetup=0 AND s.Role=u.Role AND u.Role IN (1,2,3)
-              AND (u.LinkedPersonId IS NULL OR EXISTS(SELECT 1 FROM Persons p WHERE p.PersonId=u.LinkedPersonId AND p.ActiveFlag=1))
+              AND ((u.Role=1 AND u.LinkedPersonId IS NULL) OR (u.LinkedPersonId IS NOT NULL AND EXISTS(SELECT 1 FROM Persons p WHERE p.PersonId=u.LinkedPersonId AND p.ActiveFlag=1)))
             """,r=>(Id:r.GetString(0),Issued:r.GetString(1),Expires:r.GetString(2)),("$nonce",nonce)).ConfigureAwait(false);
         Require(rows.Count==1,"انتهت الجلسة أو تم تعطيل الحساب.",BridgeErrorCodes.Unauthorized);
+        await ClockGuard.ValidateAsync(c,t,clock.UtcNow).ConfigureAwait(false);
         var row=rows[0];
         Require(DateTimeOffset.TryParse(row.Issued,CultureInfo.InvariantCulture,DateTimeStyles.RoundtripKind,out var issued)&&DateTimeOffset.TryParse(row.Expires,CultureInfo.InvariantCulture,DateTimeStyles.RoundtripKind,out var expires)&&clock.UtcNow>=issued&&clock.UtcNow<expires,"انتهت صلاحية الجلسة.",BridgeErrorCodes.Unauthorized);
         var account=await FindAsync(c,t,row.Id).ConfigureAwait(false);
@@ -59,7 +60,7 @@ public sealed class SqliteAuthenticationStore(AlTamamDbContext database, ISystem
     public Task<ServiceResult<bool>> NeedsEnrollmentAsync(CancellationToken cancellationToken=default) => BoundaryAsync(async()=>
     {
         cancellationToken.ThrowIfCancellationRequested(); using var c=database.CreateOpenConnection();
-        return ServiceResult<bool>.Ok(Convert.ToInt64(await ScalarAsync(c,null,"SELECT COUNT(*) FROM Users WHERE Role=1").ConfigureAwait(false))==0);
+        return ServiceResult<bool>.Ok(Convert.ToInt64(await ScalarAsync(c,null,"SELECT COUNT(*) FROM Users").ConfigureAwait(false))==0);
     });
     public Task<ServiceResult<AccountDto>> EnrollAsync(EnrollmentCommand command,CancellationToken cancellationToken=default) => BoundaryAsync(async()=>
     {
@@ -67,7 +68,8 @@ public sealed class SqliteAuthenticationStore(AlTamamDbContext database, ISystem
         var hashed=PasswordSecurity.HashPassword(command.Password);
         return await database.ExecuteInWriteTransactionAsync(async(c,t)=>
         {
-            Require(Convert.ToInt64(await ScalarAsync(c,t,"SELECT COUNT(*) FROM Users WHERE Role=1").ConfigureAwait(false))==0,"تم تأسيس الإدارة العامة مسبقاً.",BridgeErrorCodes.ConflictStale);
+            Require(Convert.ToInt64(await ScalarAsync(c,t,"SELECT COUNT(*) FROM Users").ConfigureAwait(false))==0,"تم تأسيس الإدارة العامة مسبقاً.",BridgeErrorCodes.ConflictStale);
+            await ClockGuard.ValidateAsync(c,t,clock.UtcNow,advance:true).ConfigureAwait(false);
             var id="USR-"+Guid.NewGuid().ToString("N");
             await ExecuteAsync(c,t,"""
                 INSERT INTO Users(UserId,LinkedPersonId,Username,NormalizedUsername,Role,CredentialHash,PasswordSalt,
@@ -86,11 +88,14 @@ public sealed class SqliteAuthenticationStore(AlTamamDbContext database, ISystem
         return await database.ExecuteInWriteTransactionAsync(async(c,t)=>
         {
             await RequireUnusedRequestAsync(c,t,command.RequestId).ConfigureAwait(false);
+            await ClockGuard.ValidateAsync(c,t,clock.UtcNow,advance:true).ConfigureAwait(false);
             var normalized=ArabicTextNormalizer.NormalizeForSearch(command.Username);
             var credentials=(await QueryAsync(c,t,AccountSelect+" WHERE u.NormalizedUsername=$username AND u.RequiresFirstRunSetup=0",ReadCredential,("$username",normalized),("$day",Day)).ConfigureAwait(false)).SingleOrDefault();
             if(credentials?.LockedUntil is string locked && DateTimeOffset.TryParse(locked,CultureInfo.InvariantCulture,DateTimeStyles.RoundtripKind,out var until)&&clock.UtcNow<until)
                 return ServiceResult<SessionDto>.Fail(BridgeErrorCodes.Unauthorized,"الحساب مقفل مؤقتاً بسبب محاولات الدخول؛ حاول بعد خمس عشرة دقيقة.");
-            var linkedActive=credentials?.Account.LinkedPersonId is not string personId||Convert.ToInt64(await ScalarAsync(c,t,"SELECT COUNT(*) FROM Persons WHERE PersonId=$p AND ActiveFlag=1",("$p",personId)).ConfigureAwait(false))==1;
+            var linkedActive=credentials is not null && (credentials.Account.LinkedPersonId is string personId
+                ? Convert.ToInt64(await ScalarAsync(c,t,"SELECT COUNT(*) FROM Persons WHERE PersonId=$p AND ActiveFlag=1",("$p",personId)).ConfigureAwait(false))==1
+                : credentials.Account.Role==1);
             var dummy=credentials is null?DummyCredential.Value:default;
             var verified=PasswordSecurity.VerifyPassword(command.Password,credentials?.Hash??dummy.HashBase64,credentials?.Salt??dummy.SaltBase64);
             if(credentials is null||!credentials.Account.Active||!linkedActive||!verified)
@@ -143,6 +148,7 @@ public sealed class SqliteAuthenticationStore(AlTamamDbContext database, ISystem
                 Require(old.Actor==actor.UserId&&old.Op=="AUTH_CREATE_ACCOUNT"&&old.Json==payload&&target is not null&&PasswordSecurity.VerifyPassword(command.Password,target.Hash,target.Salt),"معرف الطلب مستخدم لعملية مختلفة.",BridgeErrorCodes.ConflictStale);
                 return ServiceResult<AccountDto>.Ok(target!.Account);
             }
+            Require(Convert.ToInt64(await ScalarAsync(c,t,"SELECT COUNT(*) FROM Users WHERE NormalizedUsername=$name",("$name",ArabicTextNormalizer.NormalizeForSearch(command.Username))).ConfigureAwait(false))==0,"اسم المستخدم موجود بالفعل.",BridgeErrorCodes.DuplicateUsername);
             Require(Convert.ToInt64(await ScalarAsync(c,t,"SELECT COUNT(*) FROM Users WHERE LinkedPersonId=$p AND ActiveFlag=1",("$p",command.LinkedPersonId)).ConfigureAwait(false))==0,"للفرد حساب فعال بالفعل.",BridgeErrorCodes.ConflictStale);
             var id="USR-"+Guid.NewGuid().ToString("N");
             var hash=PasswordSecurity.HashPassword(command.Password);

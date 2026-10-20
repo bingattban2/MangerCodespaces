@@ -115,7 +115,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: bingattban2/AlTamam-External-Verification
-          ref: 38c9f260fd0ff4f9203bf950eb048bfc493dc5d8
+          ref: 809fd1fffff8e8c2ec510cc8db5104cd7e11d390
           token: ${{ secrets.ALTAMAM_VERIFIER_READ_TOKEN }}
           path: verifier
           persist-credentials: false
@@ -133,7 +133,7 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $sha.Length -ne 40) { throw 'Production checkout lacks a valid source SHA' }
           Write-Host "VERIFIED_PRODUCTION_SHA=$sha"
           $approvedVerifier = (& git -C $verifier rev-parse HEAD).Trim()
-          if ($approvedVerifier -ne '38c9f260fd0ff4f9203bf950eb048bfc493dc5d8') { throw 'External verifier checkout does not match approved SHA' }
+          if ($approvedVerifier -ne '809fd1fffff8e8c2ec510cc8db5104cd7e11d390') { throw 'External verifier checkout does not match approved SHA' }
           & (Join-Path $verifier 'verify_phase01_current_regression.ps1') -RepositoryRoot $source -ResultsDirectory $output -ExpectedCommit $sha
           if ($LASTEXITCODE -ne 0) { throw "Current production regression failed: exit $LASTEXITCODE" }
       - name: Reverify project graph and conservative cleanup independently
@@ -427,10 +427,10 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Phase 03 authentication acceptance failed'}
           $proof=Get-Content (Join-Path $out 'phase03-comprehensive.json') -Raw|ConvertFrom-Json
           if($proof.status -ne 'PASS' -or $proof.sourceSha -ne $sha -or
-             $proof.isWindows -ne $true -or @($proof.checks).Count -ne 27 -or @($proof.failures).Count -ne 0){
+             $proof.isWindows -ne $true -or @($proof.checks).Count -ne 29 -or @($proof.failures).Count -ne 0){
             throw 'Missing exact-commit persisted authentication and permission evidence'
           }
-          Write-Host "PHASE03_COMPREHENSIVE_EXTERNAL=PASS; source=$sha; cases=27"
+          Write-Host "PHASE03_COMPREHENSIVE_EXTERNAL=PASS; source=$sha; cases=29"
       - name: Upload isolated verification logs
         if: always()
         uses: actions/upload-artifact@v4
