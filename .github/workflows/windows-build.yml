@@ -109,7 +109,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: bingattban2/AlTamam-External-Verification
-          ref: 1ba5a59d2857a1af845691dd1988f7b0c4e08d07
+          ref: d9441621c9c347d83565c094a906124212295ee6
           token: ${{ secrets.ALTAMAM_VERIFIER_READ_TOKEN }}
           path: verifier
           persist-credentials: false
@@ -127,7 +127,7 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $sha.Length -ne 40) { throw 'Production checkout lacks a valid source SHA' }
           Write-Host "VERIFIED_PRODUCTION_SHA=$sha"
           $approvedVerifier = (& git -C $verifier rev-parse HEAD).Trim()
-          if ($approvedVerifier -ne '1ba5a59d2857a1af845691dd1988f7b0c4e08d07') { throw 'External verifier checkout does not match approved SHA' }
+          if ($approvedVerifier -ne 'd9441621c9c347d83565c094a906124212295ee6') { throw 'External verifier checkout does not match approved SHA' }
           & (Join-Path $verifier 'verify_phase01_current_regression.ps1') -RepositoryRoot $source -ResultsDirectory $output -ExpectedCommit $sha
           if ($LASTEXITCODE -ne 0) { throw "Current production regression failed: exit $LASTEXITCODE" }
       - name: Reverify project graph and conservative cleanup independently
@@ -209,6 +209,43 @@ jobs:
             if ($hits.Count -ne 1) { throw "Required 02.01 resilience proof absent: $name" }
           }
           Write-Host "PHASE02_STEP0201_RESILIENCE_EXTERNAL=PASS; checks=$(@($proof.checks).Count); source=$sha; phaseGate=NOT_RUN"
+      - name: Prove 02.02 stable IDs, FK denial, indexes, retained V001 and rollback
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $source=Join-Path $env:GITHUB_WORKSPACE 'source'
+          $verifier=Join-Path $env:GITHUB_WORKSPACE 'verifier'
+          $out=Join-Path $env:GITHUB_WORKSPACE 'independent-phase02-evidence'
+          [IO.Directory]::CreateDirectory($out) | Out-Null
+          $sha=(& git -C $source rev-parse HEAD).Trim()
+          if($LASTEXITCODE -ne 0 -or $sha.Length -ne 40){throw 'Missing tested production SHA'}
+          $env:AlTamamRepoRoot=$source
+          $runner=Join-Path $verifier 'Phase02SchemaRunner/Phase02SchemaRunner.csproj'
+          & dotnet run --project $runner -c Release -- (Join-Path $out 'schema-constraints.json') $sha *>&1 |
+            Tee-Object -FilePath (Join-Path $out 'schema-constraints.log')
+          $exit=[int]$LASTEXITCODE
+          Set-Content -LiteralPath (Join-Path $out 'schema-constraints.exitcode') -Value $exit
+          if($exit -ne 0){throw "Real SQLCipher 02.02 constraint verification failed: $exit"}
+          $proof=Get-Content -LiteralPath (Join-Path $out 'schema-constraints.json') -Raw|ConvertFrom-Json
+          if($proof.status -ne 'PASS' -or $proof.productionSha -ne $sha -or
+             @($proof.checks).Count -lt 35 -or @($proof.failures).Count -ne 0) {
+             throw 'Missing committed SQLCipher schema and deletion-denial evidence'
+          }
+          foreach($name in @(
+            'Immutable PersonId denied even for referenced person',
+            'Immutable SiteId denied',
+            'Committed attendance cannot be deleted',
+            'Historic identity row cannot be deleted',
+            'Unknown SourceMovementId rejected',
+            'Wrong attendance assignment-person/site combination rejected',
+            'Existing V001 orphan blocks hardening and preserves original row',
+            'Existing clean V001 upgraded idempotently without schema-version rewrite',
+            'Real SQLite foreign_key_check reports zero orphans',
+            'Close and reopen SQLCipher retains constraints and rows')) {
+            $matches=@($proof.checks|Where-Object{$_.name -eq $name -and $_.pass -eq $true})
+            if($matches.Count -ne 1){throw "Required 02.02 assertion missing: $name"}
+          }
+          Write-Host "PHASE02_STEP0202_EXTERNAL=PASS; checks=$(@($proof.checks).Count); source=$sha; phaseGate=NOT_RUN"
       - name: Upload isolated verification logs
         if: always()
         uses: actions/upload-artifact@v4
