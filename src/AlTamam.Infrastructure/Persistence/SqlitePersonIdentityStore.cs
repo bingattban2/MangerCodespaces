@@ -313,7 +313,11 @@ public sealed class SqlitePersonIdentityStore : IPersonIdentityStore
                     boundary.Transaction = transaction;
                     boundary.CommandText = """
                         SELECT COUNT(1),
-                               MAX(ValidFromLocalDate)
+                               MAX(ValidFromLocalDate),
+                               (SELECT last.ValidToLocalDate FROM PersonIdentityHistory last
+                                WHERE last.PersonId=$person
+                                ORDER BY last.ValidFromLocalDate DESC, last.HistoryId DESC
+                                LIMIT 1)
                         FROM PersonIdentityHistory WHERE PersonId = $person;
                         """;
                     boundary.Parameters.AddWithValue("$person", change.PersonId.Value);
@@ -325,6 +329,12 @@ public sealed class SqlitePersonIdentityStore : IPersonIdentityStore
                     if (string.CompareOrdinal(reader.GetString(1), ToIso(change.EffectiveLocalDate)) >= 0)
                         return ServiceResult<PersonHistoricIdentityDto>.Fail(
                             BridgeErrorCodes.ConflictStale, "توجد هوية مسجلة في نفس اليوم أو بتاريخ أحدث.");
+                    // The most recent interval may end exactly on the new start date.
+                    // Reject a gap; never silently extend or relabel historical identity.
+                    if (!reader.IsDBNull(2) &&
+                        string.CompareOrdinal(reader.GetString(2), ToIso(change.EffectiveLocalDate)) < 0)
+                        return ServiceResult<PersonHistoricIdentityDto>.Fail(
+                            BridgeErrorCodes.ConflictStale, "انتهت فترة الهوية السابقة قبل تاريخ التغيير؛ لا يمكن تجاوز الفجوة تاريخياً.");
                 }
 
                 await using (var update = connection.CreateCommand())
@@ -345,6 +355,30 @@ public sealed class SqlitePersonIdentityStore : IPersonIdentityStore
                     if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
                         return ServiceResult<PersonHistoricIdentityDto>.Fail(
                             BridgeErrorCodes.ConflictStale, "تغيرت بيانات الفرد أثناء التعديل.");
+                }
+                // Close only the latest actual effective interval. This date-only
+                // boundary is exclusive: [oldStart, newStart), [newStart, NULL).
+                // Person update, interval closure, new snapshot and audit all roll
+                // back together if any storage constraint or audit append fails.
+                await using (var close = connection.CreateCommand())
+                {
+                    close.Transaction = transaction;
+                    close.CommandText = """
+                        UPDATE PersonIdentityHistory
+                           SET ValidToLocalDate=$effective
+                         WHERE HistoryId=(
+                           SELECT last.HistoryId FROM PersonIdentityHistory last
+                           WHERE last.PersonId=$person
+                           ORDER BY last.ValidFromLocalDate DESC, last.HistoryId DESC
+                           LIMIT 1)
+                           AND ValidFromLocalDate < $effective
+                           AND (ValidToLocalDate IS NULL OR ValidToLocalDate >= $effective);
+                        """;
+                    close.Parameters.AddWithValue("$person", change.PersonId.Value);
+                    close.Parameters.AddWithValue("$effective", ToIso(change.EffectiveLocalDate));
+                    if (await close.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+                        throw new InvalidOperationException(
+                            "Failed to close the preceding identity interval atomically.");
                 }
                 await using (var history = connection.CreateCommand())
                 {
