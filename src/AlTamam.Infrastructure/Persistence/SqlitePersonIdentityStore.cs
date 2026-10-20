@@ -75,9 +75,14 @@ public sealed class SqlitePersonIdentityStore : IPersonIdentityStore
         command.Transaction = transaction;
         command.CommandText = """
             SELECT h.ValidFromLocalDate, h.NameSnapshot, h.ServiceNumberASnapshot,
-                   (SELECT MIN(n.ValidFromLocalDate) FROM PersonIdentityHistory n
-                    WHERE n.PersonId = h.PersonId
-                      AND n.ValidFromLocalDate > h.ValidFromLocalDate) AS NextDate
+                   COALESCE(
+                       (SELECT MIN(n.ValidFromLocalDate) FROM PersonIdentityHistory n
+                        WHERE n.PersonId = h.PersonId
+                          AND n.ValidFromLocalDate > h.ValidFromLocalDate
+                          AND (h.ValidToLocalDate IS NULL OR
+                               n.ValidFromLocalDate < h.ValidToLocalDate)),
+                       h.ValidToLocalDate
+                   ) AS NextDate
             FROM PersonIdentityHistory h
             WHERE h.PersonId = $person AND h.ValidFromLocalDate <= $day
               AND (h.ValidToLocalDate IS NULL OR h.ValidToLocalDate > $day)
