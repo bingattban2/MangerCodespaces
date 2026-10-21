@@ -20,7 +20,7 @@ public sealed class MainWindow : Window
     public MainWindow(DesktopRuntime runtime)
     {
         _runtime=runtime;_dispatcher=new(runtime);
-        Title="التمام اليومي";Width=1280;Height=820;MinWidth=800;MinHeight=600;
+        Title="التمام اليومي";Width=Math.Min(1280,SystemParameters.WorkArea.Width);Height=Math.Min(820,SystemParameters.WorkArea.Height);MinWidth=Math.Min(800,SystemParameters.WorkArea.Width);MinHeight=Math.Min(600,SystemParameters.WorkArea.Height);
         WindowStartupLocation=WindowStartupLocation.CenterScreen;Background=new SolidColorBrush(Color.FromRgb(245,247,250));
         Content=_browser;
         Loaded+=(_,_)=>Initialization=InitializeAsync();
@@ -62,7 +62,7 @@ public sealed class MainWindow : Window
                 catch(Exception){if(!_closed)ShowFailure("تعذر استقبال نتيجة الطلب بأمان.");}
             };
             core.ProcessFailed+=(_,_)=>ShowFailure("توقف مكوّن العرض. أغلق البرنامج وافتحه مجدداً؛ تبقى البيانات المحفوظة محفوظة.");
-            core.NavigationCompleted+=(_,e)=>{if(!e.IsSuccess&&!_lifetime.IsCancellationRequested)ShowFailure("تعذر تحميل واجهة البرنامج المحلية.");};
+            core.NavigationCompleted+=(_,e)=>{if(!e.IsSuccess&&e.WebErrorStatus!=CoreWebView2WebErrorStatus.OperationCanceled&&!_lifetime.IsCancellationRequested)ShowFailure("تعذر تحميل واجهة البرنامج المحلية.");};
             core.Navigate(LocalWebUiOrigin.BaseUrl+"index.html");
         }
         catch(Exception){ShowFailure("تعذر تشغيل واجهة Windows. تحقق من توفر مكوّن Microsoft Edge WebView2 Runtime وملفات واجهة البرنامج المحلية.");throw;}
@@ -70,6 +70,7 @@ public sealed class MainWindow : Window
     private void ShowFailure(string message)
     {
         if(_lifetime.IsCancellationRequested)return;
-        _browser.IsEnabled=false;MessageBox.Show(this,message,"تعذر عرض البرنامج",MessageBoxButton.OK,MessageBoxImage.Error);
+        _browser.IsEnabled=false;
+        Dispatcher.BeginInvoke(new Action(()=>{if(!_closed)MessageBox.Show(this,message,"تعذر عرض البرنامج",MessageBoxButton.OK,MessageBoxImage.Error);}));
     }
 }
