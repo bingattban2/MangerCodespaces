@@ -94,7 +94,7 @@ public sealed class RequirementTraceabilityService
         // MonthlyGridService (3)
         "GetAvailableArchivePeriods", "QueryMonthlyGrid", "GetMonthlyCellDetails",
         // PersonRosterService (7)
-        "SearchPersons", "GetPersonSummary", "QueryPersons", "PreviewPersonIdentityUpdate",
+        "SearchPersons", "GetPersonSummary", "QueryPersons", "CreatePerson", "PreviewPersonIdentityUpdate",
         "UpdatePersonIdentity", "PreviewArchivePersons", "ArchivePersons",
         // MovementService (11)
         "QueryActivePersonsBySite", "PreviewInternalTransfer", "CommitInternalTransfer",
@@ -107,7 +107,7 @@ public sealed class RequirementTraceabilityService
         // ConfigurationService (12)
         "QueryAttendanceStatuses", "CreateAttendanceStatus", "UpdateAttendanceStatus",
         "DeactivateOrDeleteStatus", "QuerySites", "CreateSite", "RenameSite",
-        "RemoveSiteAndReassignCurrentPersons", "GetCustomFieldDefinitions", "CreateCustomFieldDefinition",
+        "RemoveSiteAndReassignCurrentPersons", "PreviewSiteRemoval", "GetCustomFieldDefinitions", "CreateCustomFieldDefinition",
         "UpdateCustomFieldMetadata", "DeactivateCustomField",
         // ExcelSheetsService (11)
         "SelectImportWorkbook", "AnalyzeImport", "PreviewImportPlan", "CommitImport",
@@ -410,7 +410,7 @@ public sealed class RequirementTraceabilityService
             OwningServices: new[] { "PersonRosterService" },
             BridgeActions: new[]
             {
-                "SearchPersons", "GetPersonSummary", "QueryPersons",
+                "SearchPersons", "GetPersonSummary", "QueryPersons", "CreatePerson",
                 "PreviewPersonIdentityUpdate", "UpdatePersonIdentity",
                 "PreviewArchivePersons", "ArchivePersons"
             },
@@ -574,7 +574,7 @@ public sealed class RequirementTraceabilityService
             {
                 "QueryAttendanceStatuses", "CreateAttendanceStatus", "UpdateAttendanceStatus",
                 "DeactivateOrDeleteStatus", "QuerySites", "CreateSite", "RenameSite",
-                "RemoveSiteAndReassignCurrentPersons", "GetCustomFieldDefinitions",
+                "RemoveSiteAndReassignCurrentPersons", "PreviewSiteRemoval", "GetCustomFieldDefinitions",
                 "CreateCustomFieldDefinition", "UpdateCustomFieldMetadata", "DeactivateCustomField"
             },
             ScreenRouteKeys: new[]

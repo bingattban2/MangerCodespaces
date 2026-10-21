@@ -6,7 +6,9 @@ The implemented authentication workflow provisions `adwas` with a user-chosen st
 
 The host maps only `https://manger.adwas.example/` to bundled resources. External navigation/resources, popups, downloads and host objects are blocked. The message dispatcher validates origin, request correlation, protocol version, exact payload shape and server-held session authority. Failed or rolled-back operations never become successful responses.
 
-Business-screen integrations beyond authentication are not yet complete; compilation alone does not make this an operational personnel-management release. Installer and Portable distribution remain gated on complete functionality and real Windows acceptance.
+Registry screens support adding personnel, effective-dated identity updates, soft archival, site and status catalogs, and roster-linked account management. Mutations are session-checked, transactional and audited; destructive site changes require a current impact preview. Historical snapshots remain unchanged.
+
+Attendance preparation, movements, reports, Excel workflows, scheduled operations and backup/restore screens are not yet complete. Installer and Portable distribution remain gated on complete functionality and real Windows acceptance.
 
 ## Build and run
 

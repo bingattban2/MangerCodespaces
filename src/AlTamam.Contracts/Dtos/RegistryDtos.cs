@@ -1,0 +1,22 @@
+namespace AlTamam.Contracts.Dtos;
+
+public sealed record PersonQuery(string Search = "", string? SiteId = null, bool IncludeInactive = false, int Offset = 0, int Limit = 50);
+public sealed record PersonPageDto(IReadOnlyList<PersonCurrentDto> Items, long Total, string BusinessDate);
+public sealed record CreatePersonCommand(string Name, string ServiceNumberA, string SiteId, string EntryDate);
+public sealed record IdentityUpdateCommand(string PersonId, string Name, string ServiceNumberA, string EffectiveDate, long ExpectedVersion, string Reason);
+public sealed record IdentityPreviewDto(PersonCurrentDto Before, string ProposedName, string ProposedServiceNumberA, string EffectiveDate, string Reason);
+public sealed record EntityVersionDto(string Id, long Version);
+public sealed record ArchivePersonsCommand(IReadOnlyList<EntityVersionDto> Persons, string Reason);
+public sealed record ArchivePreviewDto(IReadOnlyList<PersonCurrentDto> Persons, long AttendanceRecords, long Movements, long LinkedAccounts);
+public sealed record ArchiveResultDto(IReadOnlyList<string> PersonIds);
+public sealed record SiteDto(string SiteId, string DisplayName, bool SystemProtected, bool Active, long Version, long ActivePersons);
+public sealed record CatalogQuery(bool IncludeInactive = false);
+public sealed record CreateSiteCommand(string Name);
+public sealed record RenameSiteCommand(string SiteId, string Name, long ExpectedVersion);
+public sealed record SiteImpactQuery(string SiteId, long ExpectedVersion);
+public sealed record SiteImpactDto(SiteDto Site, string ImpactHash, long AffectedPersons, long BlockingPersons, string DestinationName, string EffectiveDate);
+public sealed record DisableSiteCommand(string SiteId, long ExpectedVersion, string ImpactHash, string Reason);
+public sealed record CatalogStatusDto(string StatusId, string DisplayName, string ShortSymbol, string Color, bool Active, long Version, int SortOrder, long ApprovedCount);
+public sealed record CreateStatusCommand(string Name, string Symbol, string Color, int SortOrder);
+public sealed record UpdateStatusCommand(string StatusId, string Name, string Symbol, string Color, int SortOrder, long ExpectedVersion);
+public sealed record DisableStatusCommand(string StatusId, long ExpectedVersion);

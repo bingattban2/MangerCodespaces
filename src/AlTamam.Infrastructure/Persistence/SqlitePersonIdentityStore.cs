@@ -33,12 +33,13 @@ public sealed class SqlitePersonIdentityStore : IPersonIdentityStore
         SqliteConnection connection, SqliteTransaction? transaction, string sessionNonce,
         CancellationToken cancellationToken)
     {
+        await AlTamam.Infrastructure.Security.ClockGuard.ValidateAsync(connection, transaction, _clock.UtcNow).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = """
             SELECT u.UserId, u.Username, u.Role, u.ActiveFlag, u.RequiresFirstRunSetup,
                    u.LinkedPersonId, p.CurrentVisibleName, s.Role, s.RevokedFlag,
-                   s.IssuedAtUtc, s.ExpiresAtUtc
+                   s.IssuedAtUtc, s.ExpiresAtUtc, p.ActiveFlag
             FROM UserSessions s
             JOIN Users u ON u.UserId = s.UserId
             LEFT JOIN Persons p ON p.PersonId = u.LinkedPersonId
@@ -50,7 +51,8 @@ public sealed class SqlitePersonIdentityStore : IPersonIdentityStore
         var role = (UserRole)reader.GetInt32(2);
         if (reader.GetInt32(3) != 1 || reader.GetInt32(4) != 0 ||
             reader.GetInt32(7) != (int)role || reader.GetInt32(8) != 0 ||
-            !RoleAuthorizationPolicy.CanPerformStandardOperations(role))
+            !RoleAuthorizationPolicy.CanPerformStandardOperations(role) ||
+            (reader.IsDBNull(5) ? role != UserRole.GeneralAdministration : reader.IsDBNull(11) || reader.GetInt32(11) != 1))
             return null;
         var now = _clock.UtcNow;
         if (!DateTimeOffset.TryParse(reader.GetString(9), CultureInfo.InvariantCulture,
@@ -116,6 +118,10 @@ public sealed class SqlitePersonIdentityStore : IPersonIdentityStore
                 ? ServiceResult<PersonHistoricIdentityDto>.Fail(
                     BridgeErrorCodes.MissingData, "لا يوجد سجل هوية نافذ لهذا التاريخ.")
                 : ServiceResult<PersonHistoricIdentityDto>.Ok(value);
+        }
+        catch (ServiceRejection ex)
+        {
+            return ServiceResult<PersonHistoricIdentityDto>.Fail(ex.Code, ex.Message);
         }
         catch (SqliteException ex) when (ex.SqliteErrorCode is 5 or 6)
         {
@@ -203,6 +209,10 @@ public sealed class SqlitePersonIdentityStore : IPersonIdentityStore
                     RevisionNumber: reader.GetInt32(12)));
             }
             return ServiceResult<IReadOnlyList<HistoricAttendanceDayDto>>.Ok(days);
+        }
+        catch (ServiceRejection ex)
+        {
+            return ServiceResult<IReadOnlyList<HistoricAttendanceDayDto>>.Fail(ex.Code, ex.Message);
         }
         catch (SqliteException ex) when (ex.SqliteErrorCode is 5 or 6)
         {
@@ -415,6 +425,10 @@ public sealed class SqlitePersonIdentityStore : IPersonIdentityStore
                     ? throw new InvalidOperationException("Persisted identity unavailable in the committed transaction.")
                     : ServiceResult<PersonHistoricIdentityDto>.Ok(persisted, change.ExpectedRowVersion + 1);
             }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (ServiceRejection ex)
+        {
+            return ServiceResult<PersonHistoricIdentityDto>.Fail(ex.Code, ex.Message);
         }
         catch (SqliteException ex) when (ex.SqliteErrorCode is 5 or 6)
         {

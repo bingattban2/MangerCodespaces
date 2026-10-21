@@ -33,7 +33,7 @@ public sealed class SqliteAuthenticationStore(AlTamamDbContext database, ISystem
     private async Task<Credential?> FindAsync(SqliteConnection c, SqliteTransaction? t, string id) =>
         (await QueryAsync(c,t,AccountSelect+" WHERE u.UserId=$id",ReadCredential,("$id",id),("$day",Day)).ConfigureAwait(false)).SingleOrDefault();
 
-    private async Task<AccountDto> AuthorizeAsync(SqliteConnection c, SqliteTransaction? t, string nonce)
+    internal async Task<AccountDto> AuthorizeAsync(SqliteConnection c, SqliteTransaction? t, string nonce)
     {
         Require(!string.IsNullOrWhiteSpace(nonce) && nonce.Length==64,"الجلسة غير صالحة.",BridgeErrorCodes.Unauthorized);
         var rows=await QueryAsync(c,t,"""

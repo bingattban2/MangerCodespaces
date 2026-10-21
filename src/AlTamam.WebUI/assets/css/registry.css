@@ -1,0 +1,15 @@
+.registry-content { padding: 20px; }
+.registry-toolbar, .registry-actions { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; margin-block: 16px; }
+.registry-toolbar .form-group { flex: 1; min-width: 160px; }
+.registry-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.registry-section { border: 1px solid var(--border-color, #d7e0e8); border-radius: 10px; padding: 18px; margin-block: 18px; }
+.registry-section legend { padding-inline: 8px; font-weight: 700; }
+.registry-feedback { min-height: 28px; white-space: pre-wrap; margin-block: 12px; }
+.registry-feedback[data-error="true"] { color: #b42318; }
+.registry-empty { padding: 24px; text-align: center; }
+.registry-help { color: var(--text-muted, #64748b); margin-block: 12px; line-height: 1.7; }
+.registry-confirm { max-width: 600px; width: calc(100% - 40px); padding: 24px; border: 1px solid #d7e0e8; border-radius: 12px; color: #16324f; background: white; }
+.registry-confirm::backdrop { background: rgb(22 50 79 / 45%); }
+.registry-confirm p { white-space: pre-wrap; line-height: 1.8; }
+.registry-table-actions { display: flex; gap: 8px; }
+@media (max-width: 800px) { .registry-grid { grid-template-columns: 1fr; } .registry-content { padding: 12px; } }

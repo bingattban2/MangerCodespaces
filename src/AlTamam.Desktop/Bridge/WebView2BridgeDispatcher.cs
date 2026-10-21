@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -6,6 +7,7 @@ using AlTamam.Contracts.Bridge;
 using AlTamam.Contracts.Dtos;
 using AlTamam.Contracts.Events;
 using AlTamam.Domain.Enums;
+using AlTamam.Domain.ValueObjects;
 
 namespace AlTamam.Desktop.Bridge;
 
@@ -29,6 +31,7 @@ public sealed class WebView2BridgeDispatcher(DesktopRuntime runtime)
     private sealed record CreatePayload(string Username,string Password,int Role,string LinkedPersonId);
     private sealed record PasswordPayload(string TargetUserId,string CurrentPassword,string NewPassword,long ExpectedVersion);
     private sealed record DisablePayload(string TargetUserId,long ExpectedVersion);
+    private sealed record PersonKeyPayload(string PersonId);
     private static T Payload<T>(BridgeRequest request) => request.Payload!.Deserialize<T>(JsonOptions)??throw new JsonException("Missing payload");
     private static BridgeResponse Fail(string id,string code,string message)=>new(id,false,ErrorCode:code,UserMessage:message);
     private static void ValidateJson(JsonElement element)
@@ -104,7 +107,7 @@ public sealed class WebView2BridgeDispatcher(DesktopRuntime runtime)
                     if(login.IsSuccess)_nonce=login.Value!.SessionNonce;
                     response=login.ToBridgeResponse(id);break;
                 case "GetCurrentSession":
-                    Payload<EmptyPayload>(request);response=new(id,true,new{sessionNonce=_nonce,account=actor});break;
+                    Payload<EmptyPayload>(request);response=new(id,true,new{sessionNonce=_nonce,account=actor,businessDate=runtime.Clock.CurrentBusinessDate.ToString("yyyy-MM-dd")});break;
                 case "GetNavigationPermissions":
                     Payload<EmptyPayload>(request);response=new(id,true,new{role=actor!.Role,canManageAccounts=actor.Role is 1 or 2,canArchivePersons=actor.Role is 1 or 2,canReset=actor.Role==1});break;
                 case "GetAllowedRoles":
@@ -121,7 +124,64 @@ public sealed class WebView2BridgeDispatcher(DesktopRuntime runtime)
                     if(response.Success&&change.TargetUserId==actor!.UserId)_nonce="";break;
                 case "DeactivateUserAccount":
                     var disable=Payload<DisablePayload>(request);response=(await runtime.Authentication.DisableAccountAsync(new(request.SessionNonce,disable.TargetUserId,disable.ExpectedVersion,id),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "QueryPersons": case "SearchPersons": case "QueryActivePersonsBySite": case "SearchActivePersonsForAccount":
+                    var peopleQuery=Payload<PersonQuery>(request);
+                    if(request.Action=="SearchActivePersonsForAccount"&&actor!.Role==3){response=Fail(id,BridgeErrorCodes.Unauthorized,"لا تملك صلاحية إدارة المستخدمين.");break;}
+                    if(request.Action is "QueryActivePersonsBySite" or "SearchActivePersonsForAccount")peopleQuery=peopleQuery with{IncludeInactive=false};
+                    response=(await runtime.Roster.QueryAsync(request.SessionNonce,peopleQuery,cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "GetPersonSummary":
+                    var personKey=Payload<PersonKeyPayload>(request);response=(await runtime.Roster.GetAsync(request.SessionNonce,personKey.PersonId,cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "CreatePerson":
+                    response=(await runtime.Roster.CreateAsync(request.SessionNonce,id,Payload<CreatePersonCommand>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "PreviewPersonIdentityUpdate":
+                    response=(await runtime.Roster.PreviewIdentityAsync(request.SessionNonce,Payload<IdentityUpdateCommand>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "UpdatePersonIdentity":
+                    var identity=Payload<IdentityUpdateCommand>(request);
+                    if(!DateOnly.TryParseExact(identity.EffectiveDate,"yyyy-MM-dd",CultureInfo.InvariantCulture,DateTimeStyles.None,out var effective)||identity.Name.Length>200||identity.ServiceNumberA.Length>64||identity.Reason.Length>500)
+                    {response=Fail(id,BridgeErrorCodes.ValidationError,"بيانات تعديل الهوية غير صحيحة.");break;}
+                    response=(await runtime.Identity.ChangeAsync(new(new PersonId(identity.PersonId),identity.Name,identity.ServiceNumberA,effective,identity.ExpectedVersion,id,request.SessionNonce,identity.Reason),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "PreviewArchivePersons":
+                    response=(await runtime.Roster.PreviewArchiveAsync(request.SessionNonce,Payload<ArchivePersonsCommand>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "ArchivePersons":
+                    response=(await runtime.Roster.ArchiveAsync(request.SessionNonce,id,Payload<ArchivePersonsCommand>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "QuerySites":
+                    response=(await runtime.Configuration.SitesAsync(request.SessionNonce,Payload<CatalogQuery>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "CreateSite":
+                    response=(await runtime.Configuration.CreateSiteAsync(request.SessionNonce,id,Payload<CreateSiteCommand>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "RenameSite":
+                    response=(await runtime.Configuration.RenameSiteAsync(request.SessionNonce,id,Payload<RenameSiteCommand>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "PreviewSiteRemoval":
+                    response=(await runtime.Configuration.PreviewDisableSiteAsync(request.SessionNonce,Payload<SiteImpactQuery>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "RemoveSiteAndReassignCurrentPersons":
+                    response=(await runtime.Configuration.DisableSiteAsync(request.SessionNonce,id,Payload<DisableSiteCommand>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "QueryAttendanceStatuses": case "GetActiveAttendanceStatuses":
+                    var statusQuery=Payload<CatalogQuery>(request);
+                    response=(await runtime.Configuration.StatusesAsync(request.SessionNonce,request.Action=="GetActiveAttendanceStatuses"?new(false):statusQuery,cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "CreateAttendanceStatus":
+                    response=(await runtime.Configuration.CreateStatusAsync(request.SessionNonce,id,Payload<CreateStatusCommand>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "UpdateAttendanceStatus":
+                    response=(await runtime.Configuration.UpdateStatusAsync(request.SessionNonce,id,Payload<UpdateStatusCommand>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "DeactivateOrDeleteStatus":
+                    response=(await runtime.Configuration.DisableStatusAsync(request.SessionNonce,id,Payload<DisableStatusCommand>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
                 default:response=Fail(id,BridgeErrorCodes.ValidationError,"العملية المطلوبة غير معروفة أو غير متاحة.");break;
+            }
+            if(response.Success)
+            {
+                var eventName=request.Action switch
+                {
+                    "CreatePerson" or "UpdatePersonIdentity"=>UiInvalidationEvents.PersonIdentityUpdated,
+                    "ArchivePersons"=>UiInvalidationEvents.PersonnelArchived,
+                    "CreateSite"=>UiInvalidationEvents.SiteCreated,
+                    "RenameSite" or "RemoveSiteAndReassignCurrentPersons"=>UiInvalidationEvents.SiteRenamed,
+                    "CreateAttendanceStatus"=>UiInvalidationEvents.StatusDefinitionCreated,
+                    "UpdateAttendanceStatus" or "DeactivateOrDeleteStatus"=>UiInvalidationEvents.StatusDefinitionChanged,
+                    _=>null
+                };
+                if(eventName is not null)
+                {
+                    var affected=response.Data switch{PersonCurrentDto p=>new[]{p.PersonId},PersonHistoricIdentityDto h=>new[]{h.PersonId},ArchiveResultDto a=>a.PersonIds.ToArray(),SiteDto s=>new[]{s.SiteId},CatalogStatusDto s=>new[]{s.StatusId},_=>Array.Empty<string>()};
+                    response=response with{InvalidationEvents=new[]{new UiInvalidationEventPayload(eventName,affected,runtime.Clock.CurrentBusinessDate.ToString("yyyy-MM-dd"),1)}};
+                }
             }
             if(response.Success&&request.Action is "CreateUserAccount" or "ChangeUserPassword" or "DeactivateUserAccount")
             {
