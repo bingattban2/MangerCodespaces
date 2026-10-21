@@ -125,7 +125,7 @@ public sealed partial class SqliteAttendanceStore(AlTamamDbContext database, ISy
         if (!selection.AllMatching) parameters = [.. parameters, ("$ids", JsonSerializer.Serialize(ids))];
         var rows = await SqliteOperations.QueryAsync(c, t, sql, Row, parameters).ConfigureAwait(false);
         Require(rows.Count is >= 1 and <= 10000 && (selection.AllMatching || rows.Count == ids.Count), "تغيرت القوة المختارة أو تجاوز الاختيار عشرة آلاف فرد؛ حدّث الكشف.", BridgeErrorCodes.ConflictStale);
-        Require(rows.All(x => !x.MovementExempt), "لا يسمح بالتحضير في يوم النقل أو الفصل.", BridgeErrorCodes.ConflictStale);
+        Require(rows.All(x => !x.MovementExempt), "لا يسمح بالتحضير في يوم النقل أو الفصل.", BridgeErrorCodes.TransferDayAttendanceForbidden);
         return rows;
     }
     private sealed record TargetStatus(string Id, string Name, string Symbol, string Color, long Version);
@@ -139,9 +139,9 @@ public sealed partial class SqliteAttendanceStore(AlTamamDbContext database, ISy
             FROM AttendanceStatusDefinitions s JOIN AttendanceStatusNameHistory h ON h.StatusId=s.StatusId
             WHERE s.StatusId=$id AND s.ActiveFlag=1 AND h.ValidFromLocalDate<=$day AND (h.ValidToLocalDate IS NULL OR h.ValidToLocalDate>$day)
             """, r => new TargetStatus(r.GetString(0), r.GetString(1), r.GetString(2), r.GetString(3), r.GetInt64(4)), ("$id", change.StatusId), ("$day", Day)).ConfigureAwait(false);
-        Require(status.Count == 1, "اختر حالة فعالة.");
+        Require(status.Count == 1, "اختر حالة فعالة.", BridgeErrorCodes.CustomStatusInactive);
         var rows = await SelectionAsync(c, t, actor, change.Selection).ConfigureAwait(false);
-        Require(rows.All(x => change.Revise ? x.StatusId is not null && x.StatusId != change.StatusId : x.StatusId is null), change.Revise ? "اختر أفراداً محضرين بحالة مختلفة." : "تضم المجموعة أفراداً محضرين؛ استخدم تعديل تحضير اليوم.", BridgeErrorCodes.ConflictStale);
+        Require(rows.All(x => change.Revise ? x.StatusId is not null && x.StatusId != change.StatusId : x.StatusId is null), change.Revise ? "اختر أفراداً محضرين بحالة مختلفة." : "تضم المجموعة أفراداً محضرين؛ استخدم تعديل تحضير اليوم.", change.Revise ? BridgeErrorCodes.ConflictStale : BridgeErrorCodes.AlreadyPrepared);
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { Day, actor.UserId, Change = change, Status = status[0], Rows = rows }))));
         return (new AttendancePreview(Day, hash, rows.Count, status[0].Name, rows.Take(100).ToArray()), rows, status[0]);
     }

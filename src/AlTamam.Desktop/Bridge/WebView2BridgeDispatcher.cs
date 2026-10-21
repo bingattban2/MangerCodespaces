@@ -165,9 +165,9 @@ public sealed class WebView2BridgeDispatcher(DesktopRuntime runtime)
                     response=(await runtime.Configuration.DisableStatusAsync(request.SessionNonce,id,Payload<DisableStatusCommand>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
                 case "QueryDailyRoster": case "QueryUnprepared":
                     var daily=Payload<DailyRosterQuery>(request);
-                    response=(await runtime.Attendance.QueryAsync(request.SessionNonce,request.Action=="QueryUnprepared"?daily with{UnpreparedOnly=true}:daily,cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                    response=(await runtime.Dashboard.QueryAsync(request.SessionNonce,request.Action=="QueryUnprepared"?daily with{UnpreparedOnly=true}:daily,cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
                 case "GetDashboardSummary":
-                    response=(await runtime.Attendance.SummaryAsync(request.SessionNonce,Payload<DailyRosterQuery>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                    response=(await runtime.Dashboard.SummaryAsync(request.SessionNonce,Payload<DailyRosterQuery>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
                 case "PreviewAttendanceChange":
                     response=(await runtime.Attendance.PreviewAsync(request.SessionNonce,Payload<AttendanceChange>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
                 case "SubmitAttendance": case "ReviseTodayAttendance":

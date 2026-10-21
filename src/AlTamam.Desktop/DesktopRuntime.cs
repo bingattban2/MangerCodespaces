@@ -1,6 +1,7 @@
 using System.IO;
 using AlTamam.Application.Authentication;
 using AlTamam.Application.Attendance;
+using AlTamam.Application.Dashboard;
 using AlTamam.Application.Identity;
 using AlTamam.Application.Registry;
 using AlTamam.Domain.Abstractions;
@@ -19,12 +20,14 @@ public sealed class DesktopRuntime : IDisposable
     public ConfigurationService Configuration {get;}
     public PersonIdentityService Identity {get;}
     public AttendanceService Attendance {get;}
+    public DashboardService Dashboard {get;}
     internal string DatabaseKey {get;}
     private DesktopRuntime(string root,AlTamamDbContext database,string key,ISystemClock clock)
     {
         Root=root;Database=database;DatabaseKey=key;Clock=clock;
         Authentication=new AuthenticationService(new SqliteAuthenticationStore(database,clock));
-        Attendance=new AttendanceService(new SqliteAttendanceStore(database,clock));
+        var attendance=new SqliteAttendanceStore(database,clock);
+        Attendance=new AttendanceService(attendance);Dashboard=new DashboardService(attendance);
         var registry=new SqliteRegistryStore(database,clock);
         Roster=new PersonRosterService(registry);Configuration=new ConfigurationService(registry);
         Identity=new PersonIdentityService(new SqlitePersonIdentityStore(database,clock),clock);
