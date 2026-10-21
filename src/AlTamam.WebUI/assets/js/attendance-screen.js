@@ -20,7 +20,9 @@
    const key=JSON.stringify({action,payload});if(!attempt||attempt.key!==key)attempt={key,id:crypto.randomUUID()};
    try{const result=await bridge.call(action,payload,attempt.id);attempt=null;return result;}catch(e){if(e.code!=="Timeout")attempt=null;throw e;}
   }
-  async function perform(task){if(busy)return;busy=true;feedback("");mount.setAttribute("aria-busy","true");const disabled=[...mount.querySelectorAll("button,input,select")].map(e=>[e,e.disabled]);disabled.forEach(([e])=>e.disabled=true);try{await task();}catch(e){feedback(e.message,true);}finally{busy=false;mount.removeAttribute("aria-busy");disabled.forEach(([e,v])=>{if(e.isConnected)e.disabled=v;});}}
+  let locked=new Map();
+  function lockControls(){if(!busy)return;mount.querySelectorAll("button,input,select").forEach(e=>{if(!locked.has(e))locked.set(e,e.disabled);e.disabled=true;});}
+  async function perform(task){if(busy)return;busy=true;feedback("");mount.setAttribute("aria-busy","true");locked=new Map();lockControls();try{await task();}catch(e){feedback(e.message,true);}finally{busy=false;locked.forEach((v,e)=>{if(e.isConnected)e.disabled=v;});locked.clear();mount.removeAttribute("aria-busy");}}
   const root=new URL("../../",document.querySelector('script[src$="/bridge-client.js"]').src);
   function stats(){return `<div class="counters-grid">${[["إجمالي القوة",summary.rosterCount],["القوة المستحقة للتحضير",summary.eligibleCount],["يوم نقل — مستثنى",summary.movementExemptCount],["المحضرون",summary.preparedCount],["غير المحضرين",summary.unpreparedCount],...statuses.map(s=>[s.displayName,summary.statusCounts.filter(c=>c.id===s.statusId).reduce((a,c)=>a+c.count,0),({"STS-PRESENT":"present","STS-LEAVE":"leave","STS-ABSENT":"absent","STS-PERMISSION":"permission"}[s.statusId]||"navy")]),...summary.statusCounts.filter(c=>!statuses.some(s=>s.statusId===c.id)).map(c=>[c.caption+" (حالة معطلة)",c.count,"navy"])].map(([label,n,kind])=>`<div class="counter-card counter-kind-${kind||"navy"}"><div class="counter-label">${esc(label)}</div><div class="counter-value">${n}</div></div>`).join("")}</div><p class="registry-help">غير المحضرين لم تُعتمد لهم حالة بعد. نسبة اكتمال التحضير: ${summary.eligibleCount?Math.round(summary.preparedCount*100/summary.eligibleCount):0}%</p>`;}
   function render(){
@@ -47,12 +49,14 @@
    });};
    mount.querySelector("#attendanceSaveDraft").onclick=()=>perform(async()=>{const input=change();if(!await confirm("حفظ مسودة","ستُحفظ اختياراتك دون اعتماد أي تحضير رسمي."))return;await mutate("SaveAttendanceDraft",{change:input});feedback("تم حفظ المسودة دون اعتماد التحضير.");});
    mount.querySelector("#attendanceDrafts").onclick=()=>perform(showDrafts);
+   lockControls();
   }
   async function showDrafts(){
    const drafts=await bridge.call("ListAttendanceDrafts");const list=mount.querySelector("#attendanceDraftList");
    list.innerHTML=`<h2>المسودات</h2>${drafts.map(d=>`<div class="registry-section"><span>${esc(d.businessDate)} — ${d.personIds.length} فرداً</span> <button class="btn btn-outline" data-load-draft="${esc(d.draftId)}"${d.businessDate!==session.businessDate?" disabled":""}>تحميل ومعاينة</button> <button class="btn btn-outline" data-delete-draft="${esc(d.draftId)}">حذف المسودة</button></div>`).join("")||"<p>لا توجد مسودات محفوظة.</p>"}`;
    list.querySelectorAll("[data-load-draft]").forEach(e=>e.onclick=()=>perform(async()=>{const d=drafts.find(x=>x.draftId===e.dataset.loadDraft);draftId=d.draftId;target=d.statusId;chosen=new Set(d.personIds);all=false;revise=false;reason="";filter={...filter,search:"",siteId:null,statusId:null,unpreparedOnly:false,offset:0};await load();}));
    list.querySelectorAll("[data-delete-draft]").forEach(e=>e.onclick=()=>perform(async()=>{if(!await confirm("حذف مسودة","حذف هذه المسودة فقط؟"))return;await mutate("DeleteAttendanceDraft",{draftId:e.dataset.deleteDraft});feedback("تم حذف المسودة.");await showDrafts();}));
+   lockControls();
   }
   async function load(){
    const current=++sequence;const nextSession=await bridge.session();

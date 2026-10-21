@@ -112,7 +112,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: bingattban2/AlTamam-External-Verification
-          ref: 78d6329d72c66fac2d3f85f8c54c6be4921d2798
+          ref: bf541fcd46360c684d08b433f8e4c3db1490b0a4
           token: ${{ secrets.ALTAMAM_VERIFIER_READ_TOKEN }}
           path: verifier
           persist-credentials: false
@@ -130,7 +130,7 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $sha.Length -ne 40) { throw 'Production checkout lacks a valid source SHA' }
           Write-Host "VERIFIED_PRODUCTION_SHA=$sha"
           $approvedVerifier = (& git -C $verifier rev-parse HEAD).Trim()
-          if ($approvedVerifier -ne '78d6329d72c66fac2d3f85f8c54c6be4921d2798') { throw 'External verifier checkout does not match approved SHA' }
+          if ($approvedVerifier -ne 'bf541fcd46360c684d08b433f8e4c3db1490b0a4') { throw 'External verifier checkout does not match approved SHA' }
           & (Join-Path $verifier 'verify_phase01_current_regression.ps1') -RepositoryRoot $source -ResultsDirectory $output -ExpectedCommit $sha
           if ($LASTEXITCODE -ne 0) { throw "Current production regression failed: exit $LASTEXITCODE" }
       - name: Reverify project graph and conservative cleanup independently
