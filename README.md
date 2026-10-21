@@ -8,7 +8,9 @@ The host maps only `https://manger.adwas.example/` to bundled resources. Externa
 
 Registry screens support adding personnel, effective-dated identity updates, soft archival, site and status catalogs, and roster-linked account management. Mutations are session-checked, transactional and audited; destructive site changes require a current impact preview. Historical snapshots remain unchanged.
 
-Attendance preparation, movements, reports, Excel workflows, scheduled operations and backup/restore screens are not yet complete. Installer and Portable distribution remain gated on complete functionality and real Windows acceptance.
+Current-day attendance supports authenticated single and atomic bulk confirmation, stale-preview rejection, immutable revision evidence, real dashboard counters, unprepared filters and user-owned drafts. The existing attendance and dashboard pages use persisted SQLCipher data.
+
+Movements, reports, Excel workflows, scheduled operations and backup/restore screens are not yet complete. Installer and Portable distribution remain gated on complete functionality and real Windows acceptance.
 
 ## Build and run
 

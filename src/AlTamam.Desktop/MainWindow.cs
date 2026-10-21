@@ -55,7 +55,8 @@ public sealed class MainWindow : Window
                 if(_closed)return;
                 try
                 {
-                    var response=await _dispatcher.DispatchAsync(e.Source,e.WebMessageAsJson,_lifetime.Token);
+                    var source=e.Source;var json=e.WebMessageAsJson;var token=_lifetime.Token;
+                    var response=await Task.Run(()=>_dispatcher.DispatchAsync(source,json,token),token);
                     if(!_closed)core.PostWebMessageAsJson(JsonSerializer.Serialize(response,WebView2BridgeDispatcher.JsonOptions));
                 }
                 catch(OperationCanceledException){}

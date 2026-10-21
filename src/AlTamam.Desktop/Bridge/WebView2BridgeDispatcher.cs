@@ -163,12 +163,31 @@ public sealed class WebView2BridgeDispatcher(DesktopRuntime runtime)
                     response=(await runtime.Configuration.UpdateStatusAsync(request.SessionNonce,id,Payload<UpdateStatusCommand>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
                 case "DeactivateOrDeleteStatus":
                     response=(await runtime.Configuration.DisableStatusAsync(request.SessionNonce,id,Payload<DisableStatusCommand>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "QueryDailyRoster": case "QueryUnprepared":
+                    var daily=Payload<DailyRosterQuery>(request);
+                    response=(await runtime.Attendance.QueryAsync(request.SessionNonce,request.Action=="QueryUnprepared"?daily with{UnpreparedOnly=true}:daily,cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "GetDashboardSummary":
+                    response=(await runtime.Attendance.SummaryAsync(request.SessionNonce,Payload<DailyRosterQuery>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "PreviewAttendanceChange":
+                    response=(await runtime.Attendance.PreviewAsync(request.SessionNonce,Payload<AttendanceChange>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "SubmitAttendance": case "ReviseTodayAttendance":
+                    var attendance=Payload<CommitAttendanceCommand>(request);
+                    if(attendance.Change.Revise!=(request.Action=="ReviseTodayAttendance")){response=Fail(id,BridgeErrorCodes.ValidationError,"نوع طلب التحضير غير صحيح.");break;}
+                    response=(await runtime.Attendance.CommitAsync(request.SessionNonce,id,attendance,cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "SaveAttendanceDraft":
+                    response=(await runtime.Attendance.SaveDraftAsync(request.SessionNonce,id,Payload<SaveAttendanceDraftCommand>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "ListAttendanceDrafts":
+                    Payload<EmptyPayload>(request);response=(await runtime.Attendance.ListDraftsAsync(request.SessionNonce,cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "DeleteAttendanceDraft":
+                    response=(await runtime.Attendance.DeleteDraftAsync(request.SessionNonce,id,Payload<DeleteAttendanceDraftCommand>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
                 default:response=Fail(id,BridgeErrorCodes.ValidationError,"العملية المطلوبة غير معروفة أو غير متاحة.");break;
             }
             if(response.Success)
             {
                 var eventName=request.Action switch
                 {
+                    "SubmitAttendance"=>UiInvalidationEvents.AttendanceCommitted,
+                    "ReviseTodayAttendance"=>UiInvalidationEvents.AttendanceRevised,
                     "CreatePerson" or "UpdatePersonIdentity"=>UiInvalidationEvents.PersonIdentityUpdated,
                     "ArchivePersons"=>UiInvalidationEvents.PersonnelArchived,
                     "CreateSite"=>UiInvalidationEvents.SiteCreated,

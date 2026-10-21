@@ -46,11 +46,7 @@ window.navigateTop=navigateTop;window.toggleTheme=toggleTheme;window.closeModal=
 const _showExistingRouteLinks = navigateTop;
 function renderOverviewShell(section){
   const unknown='—';
-  const category=[['موجود','#38BDF8','م','present'],['إجازة','#22C55E','ج','leave'],['غياب','#EF4444','غ','absent'],['إذن','#EAB308','إ','permission']];
-  const counters=[['إجمالي القوة','👥','navy'],...category.map(x=>[x[0],x[2],x[3]]),['غير المحضرين','⚠️','unprepared'],['نسبة اكتمال التحضير','📊','completion']];
-  const dashboardCards=counters.map(x=>`<div class="counter-card counter-kind-${x[2]}"><div class="counter-label"><span>${x[0]}</span><span>${x[1]}</span></div><div class="counter-value">${unknown}</div><div class="counter-sub">تظهر البيانات بعد الربط بخدمات البرنامج</div></div>`).join('');
-  const placeholderRow='<tr><td colspan="5" class="presentf23e59d84">لا توجد بيانات متاحة قبل الربط بالمصدر المعتمد</td></tr>';
-  if(section==='dashboard')return `<section class="card"><div class="card-header"><div><h1 class="page-title">التمام اليومي</h1><div class="present2bb5163fc">عرض القوة والتحضير بحسب الموقع والحالة</div></div><div class="present01ef7fc99"><label>الموقع:</label><select class="form-select" aria-label="الموقع" disabled><option>جميع المواقع</option></select><button class="btn btn-primary" disabled>↻ تحديث</button></div></div><div class="counters-grid present87c136dfd">${dashboardCards}</div><div class="chips-row present2b583d738"><button class="filter-chip active" disabled>الكل</button>${category.map(x=>`<button class="filter-chip" disabled><span class="color-dot status-dot-${x[3]}"></span>${x[0]}</button>`).join('')}</div><div class="table-wrap"><table class="data-table"><thead><tr><th>الرقم</th><th>الرقم (ع)</th><th>الاسم</th><th>الموقع</th><th>الحالة</th></tr></thead><tbody>${placeholderRow}</tbody></table></div></section>`;
+  if(section==='dashboard')return '<section class="card"><div class="card-header"><h1 class="page-title">التمام اليومي</h1></div><div id="attendanceMount">جاري تحميل التمام…</div></section>';
   if(section==='monthly'){
     const dayHeaders=Array.from({length:31},(_,i)=>`<th>${i+1}</th>`).join('');
     return `<section class="card"><div class="card-header"><div><h1 class="page-title">التمام الشهري</h1><div class="present865c33f0e">الأيام والبيانات التاريخية تظهر بعد ربط قاعدة البيانات</div></div><div class="present06307df0e"><select class="form-select" disabled><option>جميع المواقع</option></select><select class="form-select" disabled><option>الشهر</option></select><select class="form-select" disabled><option>السنة</option></select></div></div><div class="table-wrap"><table class="data-table"><thead><tr><th>الرقم</th><th>الرقم (ع)</th><th>الاسم</th><th>الموقع</th>${dayHeaders}</tr></thead><tbody><tr><td colspan="35" class="presentf23e59d84">يتم عرض السجلات بعد توفير استعلام الشهر الفعلي</td></tr></tbody></table></div></section>`;
@@ -62,6 +58,7 @@ navigateTop=function(section){
   _showExistingRouteLinks(section);
   const container=document.getElementById('appViewport');
   if(container)container.insertAdjacentHTML('afterbegin',renderOverviewShell(section));
+  window.dispatchEvent(new Event('altamam:attendance-mount'));
 };
 window.navigateTop=navigateTop;
 
