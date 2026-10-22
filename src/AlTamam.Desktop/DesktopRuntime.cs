@@ -22,6 +22,8 @@ public sealed class DesktopRuntime : IDisposable
     public AttendanceService Attendance {get;}
     public DashboardService Dashboard {get;}
     private readonly EightPmAutoAttendanceScheduler _scheduler;
+    private readonly object _lifecycle = new();
+    private bool _disposed;
     internal string DatabaseKey {get;}
     private DesktopRuntime(string root,AlTamamDbContext database,string key,ISystemClock clock)
     {
@@ -49,5 +51,14 @@ public sealed class DesktopRuntime : IDisposable
         try {await database.InitializeAsync(cancellationToken);return new DesktopRuntime(root,database,key,new SystemClock());}
         catch {database.Dispose();throw;}
     }
-    public void Dispose(){_scheduler.Dispose();Database.Dispose();}
+    public void Dispose()
+    {
+        lock (_lifecycle)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            try { _scheduler.Dispose(); }
+            finally { Database.Dispose(); }
+        }
+    }
 }
