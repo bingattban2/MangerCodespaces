@@ -112,7 +112,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: bingattban2/AlTamam-External-Verification
-          ref: 352d73a652e862d79fddb373827d234631f6842c
+          ref: 65325b93807c272973e26411e0b1a3eaa7d228bd
           token: ${{ secrets.ALTAMAM_VERIFIER_READ_TOKEN }}
           path: verifier
           persist-credentials: false
@@ -130,7 +130,7 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $sha.Length -ne 40) { throw 'Production checkout lacks a valid source SHA' }
           Write-Host "VERIFIED_PRODUCTION_SHA=$sha"
           $approvedVerifier = (& git -C $verifier rev-parse HEAD).Trim()
-          if ($approvedVerifier -ne '352d73a652e862d79fddb373827d234631f6842c') { throw 'External verifier checkout does not match approved SHA' }
+          if ($approvedVerifier -ne '65325b93807c272973e26411e0b1a3eaa7d228bd') { throw 'External verifier checkout does not match approved SHA' }
           & (Join-Path $verifier 'verify_phase01_current_regression.ps1') -RepositoryRoot $source -ResultsDirectory $output -ExpectedCommit $sha
           if ($LASTEXITCODE -ne 0) { throw "Current production regression failed: exit $LASTEXITCODE" }
       - name: Reverify project graph and conservative cleanup independently
@@ -520,6 +520,30 @@ jobs:
           }
           @{phase='07';status='PASS';sourceSha=$sha;components=$proofs;caseCount=29}|ConvertTo-Json -Depth 30|Set-Content (Join-Path $out 'phase07-comprehensive.json')
           Write-Host "PHASE07_COMPREHENSIVE_EXTERNAL=PASS; source=$sha; cases=29"
+      - name: Run single comprehensive Phase 08 movements and monthly grid and actual Windows UI acceptance
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $source=Join-Path $env:GITHUB_WORKSPACE 'source'
+          $verifier=Join-Path $env:GITHUB_WORKSPACE 'verifier'
+          $out=Join-Path $env:GITHUB_WORKSPACE 'independent-phase08-evidence'
+          [IO.Directory]::CreateDirectory($out)|Out-Null
+          $sha=(& git -C $source rev-parse HEAD).Trim()
+          $env:AlTamamRepoRoot=$source
+          $components=@(@{name='movement';project='Phase08MovementRunner';count=24},@{name='desktop';project='Phase08DesktopRunner';count=23})
+          $proofs=@()
+          foreach($component in $components){
+            $runner=Join-Path $verifier ($component.project+'/'+$component.project+'.csproj')
+            $proofPath=Join-Path $out ($component.name+'.json')
+            & dotnet run --project $runner -c Release -- $proofPath $sha *>&1 |
+              Tee-Object -FilePath (Join-Path $out ($component.name+'.log'))
+            if($LASTEXITCODE -ne 0){throw ('Phase08 component failed: '+$component.name)}
+            $proof=Get-Content $proofPath -Raw|ConvertFrom-Json
+            if($proof.status -ne 'PASS' -or $proof.sourceSha -ne $sha -or $proof.isWindows -ne $true -or @($proof.checks).Count -ne $component.count -or @($proof.failures).Count -ne 0){throw ('Missing real Phase08 evidence: '+$component.name)}
+            $proofs+=$proof
+          }
+          @{phase='08';status='PASS';sourceSha=$sha;components=$proofs;caseCount=47}|ConvertTo-Json -Depth 30|Set-Content (Join-Path $out 'phase08-comprehensive.json')
+          Write-Host "PHASE08_COMPREHENSIVE_EXTERNAL=PASS; source=$sha; cases=47"
       - name: Upload isolated verification logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -534,4 +558,5 @@ jobs:
             independent-phase05-evidence/
             independent-phase06-evidence/
             independent-phase07-evidence/
+            independent-phase08-evidence/
           if-no-files-found: warn

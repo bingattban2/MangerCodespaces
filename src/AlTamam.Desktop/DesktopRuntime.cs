@@ -4,6 +4,8 @@ using AlTamam.Application.Attendance;
 using AlTamam.Application.Dashboard;
 using AlTamam.Application.Identity;
 using AlTamam.Application.Registry;
+using AlTamam.Application.Movement;
+using AlTamam.Application.Monthly;
 using AlTamam.Domain.Abstractions;
 using AlTamam.Infrastructure.Persistence;
 using AlTamam.Infrastructure.Security;
@@ -21,6 +23,8 @@ public sealed class DesktopRuntime : IDisposable
     public PersonIdentityService Identity {get;}
     public AttendanceService Attendance {get;}
     public DashboardService Dashboard {get;}
+    public MovementService Movement {get;}
+    public MonthlyGridService Monthly {get;}
     private readonly EightPmAutoAttendanceScheduler _scheduler;
     private readonly object _lifecycle = new();
     private bool _disposed;
@@ -33,6 +37,7 @@ public sealed class DesktopRuntime : IDisposable
         Attendance=new AttendanceService(attendance,attendance);Dashboard=new DashboardService(attendance,attendance);
         _scheduler=new EightPmAutoAttendanceScheduler(attendance);_scheduler.Start();
         var registry=new SqliteRegistryStore(database,clock);
+        Movement=new MovementService(registry);Monthly=new MonthlyGridService(registry);
         Roster=new PersonRosterService(registry);Configuration=new ConfigurationService(registry);
         Identity=new PersonIdentityService(new SqlitePersonIdentityStore(database,clock),clock);
     }

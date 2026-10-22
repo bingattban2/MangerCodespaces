@@ -163,6 +163,28 @@ public sealed class WebView2BridgeDispatcher(DesktopRuntime runtime)
                     response=(await runtime.Configuration.UpdateStatusAsync(request.SessionNonce,id,Payload<UpdateStatusCommand>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
                 case "DeactivateOrDeleteStatus":
                     response=(await runtime.Configuration.DisableStatusAsync(request.SessionNonce,id,Payload<DisableStatusCommand>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "PreviewInternalTransfer": case "PreviewExternalTransfer": case "PreviewSeparation":
+                    var movePreview=Payload<MovementChange>(request);
+                    var previewType=request.Action=="PreviewInternalTransfer"?1:request.Action=="PreviewExternalTransfer"?2:3;
+                    if(movePreview.Type!=previewType){response=Fail(id,BridgeErrorCodes.ValidationError,"نوع الحركة لا يطابق العملية المطلوبة.");break;}
+                    response=(await runtime.Movement.PreviewAsync(request.SessionNonce,movePreview,cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "CommitInternalTransfer": case "CommitExternalTransfer": case "CommitSeparation":
+                    var move=Payload<CommitMovement>(request);
+                    var moveType=request.Action=="CommitInternalTransfer"?1:request.Action=="CommitExternalTransfer"?2:3;
+                    if(move.Change.Type!=moveType){response=Fail(id,BridgeErrorCodes.ValidationError,"نوع الحركة لا يطابق العملية المطلوبة.");break;}
+                    response=(await runtime.Movement.CommitAsync(request.SessionNonce,id,move,cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "QueryMovementArchive": case "QuerySeparationArchive":
+                    var archiveQuery=Payload<MovementArchiveQuery>(request);
+                    response=(await runtime.Movement.QueryAsync(request.SessionNonce,request.Action=="QuerySeparationArchive"?archiveQuery with{Type=3}:archiveQuery,cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "GetMovementDetails": case "GetSeparationDetails":
+                    var movementKey=Payload<MovementKey>(request);
+                    response=(await runtime.Movement.GetAsync(request.SessionNonce,movementKey.MovementId,cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "GetAvailableArchivePeriods":
+                    Payload<EmptyPayload>(request);response=(await runtime.Monthly.PeriodsAsync(request.SessionNonce,cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "QueryMonthlyGrid":
+                    response=(await runtime.Monthly.QueryAsync(request.SessionNonce,Payload<MonthlyQuery>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "GetMonthlyCellDetails":
+                    response=(await runtime.Monthly.CellAsync(request.SessionNonce,Payload<MonthlyCellQuery>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
                 case "GetAutoAttendanceRun":
                     response=(await runtime.Dashboard.GetDayStatusAsync(request.SessionNonce,Payload<DayProcessingQuery>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
                 case "PreviewClosedDayCorrection":
@@ -194,6 +216,7 @@ public sealed class WebView2BridgeDispatcher(DesktopRuntime runtime)
                 {
                     "SubmitAttendance"=>UiInvalidationEvents.AttendanceCommitted,
                     "ReviseTodayAttendance" or "CommitClosedDayCorrection"=>UiInvalidationEvents.AttendanceRevised,
+                    "CommitInternalTransfer" or "CommitExternalTransfer" or "CommitSeparation"=>UiInvalidationEvents.PersonnelMoved,
                     "CreatePerson" or "UpdatePersonIdentity"=>UiInvalidationEvents.PersonIdentityUpdated,
                     "ArchivePersons"=>UiInvalidationEvents.PersonnelArchived,
                     "CreateSite"=>UiInvalidationEvents.SiteCreated,
