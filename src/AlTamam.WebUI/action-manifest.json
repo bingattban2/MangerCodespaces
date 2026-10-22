@@ -2341,6 +2341,54 @@
           "payload"
         ]
       }
+    },
+    {
+      "action": "PreviewClosedDayCorrection",
+      "owningService": "AttendanceService",
+      "allowedRoles": [
+        "GeneralAdministration"
+      ],
+      "isMutating": false,
+      "idempotentByRequestId": false,
+      "errorCodes": [
+        "ValidationError",
+        "TransferDayAttendanceForbidden",
+        "HistoricDayLocked"
+      ],
+      "requestSchema": {
+        "type": "object",
+        "required": [
+          "requestId",
+          "protocolVersion",
+          "action",
+          "sessionNonce",
+          "payload"
+        ]
+      }
+    },
+    {
+      "action": "CommitClosedDayCorrection",
+      "owningService": "AttendanceService",
+      "allowedRoles": [
+        "GeneralAdministration"
+      ],
+      "isMutating": true,
+      "idempotentByRequestId": true,
+      "errorCodes": [
+        "HistoricDayLocked",
+        "TransferDayAttendanceForbidden",
+        "ConflictStale"
+      ],
+      "requestSchema": {
+        "type": "object",
+        "required": [
+          "requestId",
+          "protocolVersion",
+          "action",
+          "sessionNonce",
+          "payload"
+        ]
+      }
     }
   ]
 }

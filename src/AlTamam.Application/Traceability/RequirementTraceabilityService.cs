@@ -88,9 +88,10 @@ public sealed class RequirementTraceabilityService
         "GetNavigationPermissions", "Logout", "GetAllowedRoles",
         // DashboardService (4)
         "GetDashboardSummary", "QueryDailyRoster", "QueryUnprepared", "GetAutoAttendanceRun",
-        // AttendanceService (7)
+        // AttendanceService (9)
         "GetActiveAttendanceStatuses", "PreviewAttendanceChange", "SubmitAttendance",
         "ReviseTodayAttendance", "SaveAttendanceDraft", "ListAttendanceDrafts", "DeleteAttendanceDraft",
+                "PreviewClosedDayCorrection", "CommitClosedDayCorrection",
         // MonthlyGridService (3)
         "GetAvailableArchivePeriods", "QueryMonthlyGrid", "GetMonthlyCellDetails",
         // PersonRosterService (7)
@@ -276,7 +277,8 @@ public sealed class RequirementTraceabilityService
             BridgeActions: new[]
             {
                 "GetActiveAttendanceStatuses", "PreviewAttendanceChange", "SubmitAttendance",
-                "ReviseTodayAttendance", "SaveAttendanceDraft", "ListAttendanceDrafts", "DeleteAttendanceDraft"
+                "ReviseTodayAttendance", "SaveAttendanceDraft", "ListAttendanceDrafts", "DeleteAttendanceDraft",
+                "PreviewClosedDayCorrection", "CommitClosedDayCorrection"
             },
             ScreenRouteKeys: new[]
             {

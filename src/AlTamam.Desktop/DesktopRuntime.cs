@@ -21,13 +21,15 @@ public sealed class DesktopRuntime : IDisposable
     public PersonIdentityService Identity {get;}
     public AttendanceService Attendance {get;}
     public DashboardService Dashboard {get;}
+    private readonly EightPmAutoAttendanceScheduler _scheduler;
     internal string DatabaseKey {get;}
     private DesktopRuntime(string root,AlTamamDbContext database,string key,ISystemClock clock)
     {
         Root=root;Database=database;DatabaseKey=key;Clock=clock;
         Authentication=new AuthenticationService(new SqliteAuthenticationStore(database,clock));
         var attendance=new SqliteAttendanceStore(database,clock);
-        Attendance=new AttendanceService(attendance);Dashboard=new DashboardService(attendance);
+        Attendance=new AttendanceService(attendance,attendance);Dashboard=new DashboardService(attendance,attendance);
+        _scheduler=new EightPmAutoAttendanceScheduler(attendance);_scheduler.Start();
         var registry=new SqliteRegistryStore(database,clock);
         Roster=new PersonRosterService(registry);Configuration=new ConfigurationService(registry);
         Identity=new PersonIdentityService(new SqlitePersonIdentityStore(database,clock),clock);
@@ -47,5 +49,5 @@ public sealed class DesktopRuntime : IDisposable
         try {await database.InitializeAsync(cancellationToken);return new DesktopRuntime(root,database,key,new SystemClock());}
         catch {database.Dispose();throw;}
     }
-    public void Dispose()=>Database.Dispose();
+    public void Dispose(){_scheduler.Dispose();Database.Dispose();}
 }

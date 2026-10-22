@@ -163,6 +163,12 @@ public sealed class WebView2BridgeDispatcher(DesktopRuntime runtime)
                     response=(await runtime.Configuration.UpdateStatusAsync(request.SessionNonce,id,Payload<UpdateStatusCommand>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
                 case "DeactivateOrDeleteStatus":
                     response=(await runtime.Configuration.DisableStatusAsync(request.SessionNonce,id,Payload<DisableStatusCommand>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "GetAutoAttendanceRun":
+                    response=(await runtime.Dashboard.GetDayStatusAsync(request.SessionNonce,Payload<DayProcessingQuery>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "PreviewClosedDayCorrection":
+                    response=(await runtime.Attendance.PreviewCorrectionAsync(request.SessionNonce,Payload<ClosedDayCorrection>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "CommitClosedDayCorrection":
+                    response=(await runtime.Attendance.CorrectClosedDayAsync(request.SessionNonce,id,Payload<CommitClosedDayCorrection>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
                 case "QueryDailyRoster": case "QueryUnprepared":
                     var daily=Payload<DailyRosterQuery>(request);
                     response=(await runtime.Dashboard.QueryAsync(request.SessionNonce,request.Action=="QueryUnprepared"?daily with{UnpreparedOnly=true}:daily,cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
@@ -187,7 +193,7 @@ public sealed class WebView2BridgeDispatcher(DesktopRuntime runtime)
                 var eventName=request.Action switch
                 {
                     "SubmitAttendance"=>UiInvalidationEvents.AttendanceCommitted,
-                    "ReviseTodayAttendance"=>UiInvalidationEvents.AttendanceRevised,
+                    "ReviseTodayAttendance" or "CommitClosedDayCorrection"=>UiInvalidationEvents.AttendanceRevised,
                     "CreatePerson" or "UpdatePersonIdentity"=>UiInvalidationEvents.PersonIdentityUpdated,
                     "ArchivePersons"=>UiInvalidationEvents.PersonnelArchived,
                     "CreateSite"=>UiInvalidationEvents.SiteCreated,

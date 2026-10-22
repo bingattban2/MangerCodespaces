@@ -31,13 +31,16 @@ public sealed partial class SqliteAttendanceStore(AlTamamDbContext database, ISy
         t.Commit(); return ServiceResult<T>.Ok(value);
     });
     private Task<ServiceResult<T>> WriteAsync<T>(string nonce, string requestId, string operation, object input,
-        Func<SqliteConnection, SqliteTransaction, AccountDto, Task<Mutation<T>>> write, CancellationToken token) => BoundaryAsync(async () =>
+        Func<SqliteConnection, SqliteTransaction, AccountDto, Task<Mutation<T>>> write, CancellationToken token,
+        string? effectiveDay = null, string? reason = null, Func<SqliteConnection, SqliteTransaction, AccountDto, Task>? authorize = null) => BoundaryAsync(async () =>
     {
         Require(Guid.TryParseExact(requestId, "D", out _), "معرف الطلب غير صحيح.");
+        Require(DateOnly.TryParseExact(effectiveDay ?? Day, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var auditDate), "التاريخ غير صحيح.");
         var serialized = JsonSerializer.Serialize(input);
         return await database.ExecuteInWriteTransactionAsync(async (c, t) =>
         {
             var actor = await _sessions.AuthorizeAsync(c, t, nonce).ConfigureAwait(false);
+            if (authorize is not null) await authorize(c, t, actor).ConfigureAwait(false);
             await ClockGuard.ValidateAsync(c, t, clock.UtcNow, advance: true).ConfigureAwait(false);
             var prior = await SqliteOperations.QueryAsync(c, t, "SELECT OperationCode,ActorUserId,NewValueJson FROM AuditEvents WHERE CorrelationId=$id",
                 r => (Operation: r.GetString(0), Actor: r.GetString(1), Json: r.GetString(2)), ("$id", requestId)).ConfigureAwait(false);
@@ -53,8 +56,8 @@ public sealed partial class SqliteAttendanceStore(AlTamamDbContext database, ISy
             var result = mutation.Result;
             await SqliteAuditEventWriter.AppendAsync(c, t, operation, "التحضير اليومي", new UserId(actor.UserId),
                 actor.LinkedPersonId is null ? null : new PersonId(actor.LinkedPersonId), actor.Username, actor.FullName,
-                "Attendance", Day, "التحضير اليومي", mutation.Before is null ? null : JsonSerializer.Serialize(mutation.Before), JsonSerializer.Serialize(new Receipt<T>(serialized, result)),
-                "عملية تحضير معتمدة", null, clock.CurrentBusinessDate, clock.UtcNow, requestId, token).ConfigureAwait(false);
+                "Attendance", effectiveDay ?? Day, "التحضير اليومي", mutation.Before is null ? null : JsonSerializer.Serialize(mutation.Before), JsonSerializer.Serialize(new Receipt<T>(serialized, result)),
+                "عملية تحضير معتمدة", reason, auditDate, clock.UtcNow, requestId, token).ConfigureAwait(false);
             return ServiceResult<T>.Ok(result);
         }, token).ConfigureAwait(false);
     });
