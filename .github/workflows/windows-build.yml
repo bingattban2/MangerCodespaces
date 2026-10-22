@@ -112,7 +112,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: bingattban2/AlTamam-External-Verification
-          ref: 95dcf288d44792e25130a91ce14ba2b7cdb3d6fb
+          ref: 92a3001c0f7edd397748c8a412f18580bda02f35
           token: ${{ secrets.ALTAMAM_VERIFIER_READ_TOKEN }}
           path: verifier
           persist-credentials: false
@@ -130,7 +130,7 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $sha.Length -ne 40) { throw 'Production checkout lacks a valid source SHA' }
           Write-Host "VERIFIED_PRODUCTION_SHA=$sha"
           $approvedVerifier = (& git -C $verifier rev-parse HEAD).Trim()
-          if ($approvedVerifier -ne '95dcf288d44792e25130a91ce14ba2b7cdb3d6fb') { throw 'External verifier checkout does not match approved SHA' }
+          if ($approvedVerifier -ne '92a3001c0f7edd397748c8a412f18580bda02f35') { throw 'External verifier checkout does not match approved SHA' }
           & (Join-Path $verifier 'verify_phase01_current_regression.ps1') -RepositoryRoot $source -ResultsDirectory $output -ExpectedCommit $sha
           if ($LASTEXITCODE -ne 0) { throw "Current production regression failed: exit $LASTEXITCODE" }
       - name: Reverify project graph and conservative cleanup independently
@@ -506,7 +506,7 @@ jobs:
           [IO.Directory]::CreateDirectory($out)|Out-Null
           $sha=(& git -C $source rev-parse HEAD).Trim()
           $env:AlTamamRepoRoot=$source
-          $components=@(@{name='day-processing';project='Phase07DayProcessingRunner';count=19},@{name='desktop';project='Phase07DesktopRunner';count=6})
+          $components=@(@{name='day-processing';project='Phase07DayProcessingRunner';count=19},@{name='desktop';project='Phase07DesktopRunner';count=9})
           $proofs=@()
           foreach($component in $components){
             $runner=Join-Path $verifier ($component.project+'/'+$component.project+'.csproj')
@@ -518,8 +518,8 @@ jobs:
             if($proof.status -ne 'PASS' -or $proof.sourceSha -ne $sha -or $proof.isWindows -ne $true -or @($proof.checks).Count -ne $component.count -or @($proof.failures).Count -ne 0){throw ('Missing real Phase07 evidence: '+$component.name)}
             $proofs+=$proof
           }
-          @{phase='07';status='PASS';sourceSha=$sha;components=$proofs;caseCount=25}|ConvertTo-Json -Depth 30|Set-Content (Join-Path $out 'phase07-comprehensive.json')
-          Write-Host "PHASE07_COMPREHENSIVE_EXTERNAL=PASS; source=$sha; cases=25"
+          @{phase='07';status='PASS';sourceSha=$sha;components=$proofs;caseCount=28}|ConvertTo-Json -Depth 30|Set-Content (Join-Path $out 'phase07-comprehensive.json')
+          Write-Host "PHASE07_COMPREHENSIVE_EXTERNAL=PASS; source=$sha; cases=28"
       - name: Upload isolated verification logs
         if: always()
         uses: actions/upload-artifact@v4
