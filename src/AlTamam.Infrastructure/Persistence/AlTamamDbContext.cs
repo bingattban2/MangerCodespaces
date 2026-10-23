@@ -34,18 +34,28 @@ public sealed class AlTamamDbContext : IDisposable
         {
             DataSource = _databasePath,
             Mode = SqliteOpenMode.ReadWriteCreate,
-            Password = _databaseKey,
-            ForeignKeys = true,
+            Pooling = false,
             DefaultTimeout = 15
         };
         var connection = new SqliteConnection(builder.ConnectionString);
         try
         {
             connection.Open();
+            // Apply the validated hex passphrase AFTER Open owns the native handle.
+            // Microsoft.Data.Sqlite 9 initializes Password inside its internal constructor;
+            // a wrong key there can throw before the outer connection owns the handle.
+            // Opening first guarantees Dispose closes that handle on every failure path.
+            using var keyCommand = connection.CreateCommand();
+            keyCommand.CommandText = "PRAGMA key = '" + _databaseKey + "';";
+            keyCommand.ExecuteNonQuery();
             using var cipher = connection.CreateCommand();
             cipher.CommandText = "PRAGMA cipher_version;";
             if (string.IsNullOrWhiteSpace(cipher.ExecuteScalar()?.ToString()))
                 throw new InvalidOperationException("SQLCipher native encryption provider is unavailable.");
+            // Verify the key against real encrypted pages before changing any database setting.
+            using var keyCheck = connection.CreateCommand();
+            keyCheck.CommandText = "SELECT COUNT(*) FROM sqlite_master;";
+            keyCheck.ExecuteScalar();
             using var settings = connection.CreateCommand();
             settings.CommandText = "PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=15000;";
             settings.ExecuteNonQuery();
@@ -64,6 +74,25 @@ public sealed class AlTamamDbContext : IDisposable
         try
         {
             using var connection = CreateOpenConnection();
+            // A separate SQLite write lock protects initialization across independent processes.
+            // Recovery is created before applying any missing components, never by copying a live DB.
+            using (var existing = connection.CreateCommand())
+            {
+                existing.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='SchemaVersions'";
+                if (Convert.ToInt32(existing.ExecuteScalar()) != 0)
+                {
+                    using var version = connection.CreateCommand();
+                    version.CommandText = "SELECT COALESCE(MAX(SchemaVersion),0) FROM SchemaVersions";
+                    if (Convert.ToInt32(version.ExecuteScalar()) != CurrentSchemaVersion)
+                        throw new InvalidOperationException("Unsupported database version. Existing data was preserved.");
+                    using var receipts = connection.CreateCommand();
+                    receipts.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='AppliedSchemaComponents'";
+                    if (Convert.ToInt32(receipts.ExecuteScalar()) == 0)
+                        SchemaMigrationPolicy.CreateRecoverySnapshot(connection,
+                            Path.Combine(Path.GetDirectoryName(_databasePath)!, "Recovery",
+                                $"before-V001-hardening-{Guid.NewGuid():N}.db"), _databaseKey);
+                }
+            }
             using var transaction = connection.BeginTransaction();
             var hasVersionTable = false;
             using (var check = connection.CreateCommand())
@@ -159,10 +188,8 @@ public sealed class AlTamamDbContext : IDisposable
             using (var reader = new StreamReader(guardResource))
             {
                 var guardsSql = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
-                using var guards = connection.CreateCommand();
-                guards.Transaction = transaction;
-                guards.CommandText = guardsSql;
-                await guards.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                await SchemaMigrationPolicy.RegisterAsync(connection, transaction,
+                    "V001_RelationalGuards", guardsSql, cancellationToken).ConfigureAwait(false);
             }
             // 02.03 preflight does not migrate or alter historical snapshots. Existing
             // contradictions require an explicit, separately approved safe repair in 02.05.
@@ -202,10 +229,8 @@ public sealed class AlTamamDbContext : IDisposable
             using (var reader = new StreamReader(temporalResource))
             {
                 var sql = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
-                using var guard = connection.CreateCommand();
-                guard.Transaction = transaction;
-                guard.CommandText = sql;
-                await guard.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                await SchemaMigrationPolicy.RegisterAsync(connection, transaction,
+                    "V001_TemporalGuards", sql, cancellationToken).ConfigureAwait(false);
             }
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }

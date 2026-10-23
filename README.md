@@ -1,34 +1,31 @@
-# التمام اليومي — النواة البرمجية
+# التمام اليومي
 
-This repository contains the production foundation only: `Domain`, `Contracts`, `Application`, and `Infrastructure` for an offline Windows personnel/attendance system.
+Offline Windows personnel and attendance application. The four core layers (`Domain`, `Contracts`, `Application`, `Infrastructure`) remain independent of presentation. `AlTamam.Desktop` is the WPF/WebView2 host for the existing Arabic RTL local pages in `AlTamam.WebUI`.
 
-It contains the **original local HTML/CSS screen layouts** in `src/AlTamam.WebUI`, restored from the earlier complete repository, while retaining the four-layer core. There is **no WPF/WebView2 executable host yet, no implemented business-action bridge, no generated employee data and no automated test project**. Existing pages preserve their original visual baseline; their data operations must be completed in the designated implementation stages. Successful compilation of the foundation does **not** mean that personnel management, authentication, attendance, transfer, or backup features are implemented or verified.
+The implemented authentication workflow provisions `adwas` with a user-chosen strong password, persists Argon2id credentials in SQLCipher, applies lockout, validates expiring/revocable sessions and enforces operation-specific account permissions. Acknowledgement of the recovery key is required before first-run enrollment. Ordinary and supervisory accounts must link to active roster members. Credentials and session tokens are excluded from account-list DTOs and audit descriptions.
 
-Build on Windows using .NET SDK 10:
+The host maps only `https://manger.adwas.example/` to bundled resources. External navigation/resources, popups, downloads and host objects are blocked. The message dispatcher validates origin, request correlation, protocol version, exact payload shape and server-held session authority. Failed or rolled-back operations never become successful responses.
+
+Registry screens support adding personnel, effective-dated identity updates, soft archival, site and status catalogs, and roster-linked account management. Mutations are session-checked, transactional and audited; destructive site changes require a current impact preview. Historical snapshots remain unchanged.
+
+Current-day attendance supports authenticated single and atomic bulk confirmation, stale-preview rejection, immutable revision evidence, real dashboard counters, unprepared filters and user-owned drafts. The existing attendance and dashboard pages use persisted SQLCipher data.
+
+Movements, reports, Excel workflows, scheduled operations and backup/restore screens are not yet complete. Installer and Portable distribution remain gated on complete functionality and real Windows acceptance.
+
+## Build and run
+
+On Windows with .NET SDK 10 and Microsoft Edge WebView2 Runtime:
 
 ```powershell
 dotnet restore AlTamam.slnx
 dotnet build AlTamam.slnx -c Release --no-restore
+.\src\AlTamam.Desktop\bin\Release\net10.0-windows\AlTamam.exe
 ```
 
-`AlTamam.Infrastructure` contains the SQLCipher connection layer, embedded relational schema, and password hashing. It must not be initialized with real records or distributed with embedded credentials. Generate encryption keys at installation/onboarding time and protect them using the Windows key store in the subsequent security stage.
+The distributable runtime and installer are prepared only after all business workflows pass acceptance. Tests, synthetic records and acceptance evidence live outside the production tree.
 
-The SQL schema contains only fixed application catalog entries including «غير محدد», «موجود», «إجازة», «غياب», and «إذن». It does not create an active privileged user or a known password. First-run provisioning is intentionally part of the authentication stage.
+## Data and key lifecycle
 
-Source code is not shipped with any implementation plan, progress journals, sample data or test artifacts. Execution instructions and acceptance specifications are delivered separately.
+Data is stored under the current Windows user's `%LOCALAPPDATA%\AlTamamAlYawmi`, outside the installation or Portable folder. `WindowsDatabaseKeyStore` generates a random 256-bit installation key and protects it with current-user Windows DPAPI. Missing or damaged keys fail closed; the application never creates a replacement key for an existing database. Keep the recovery key shown during first-run setup in a separate safe location.
 
-## Existing screen assets
-
-The canonical UI paths are `src/AlTamam.WebUI/index.html`, `assets/css/altamam.css`, `assets/js/altamam-app.js`, `screen-manifest.json` and `screens/**/index.html` (69 existing nested route pages). The original CSS and screen layout have been preserved. The main JavaScript now offers navigation only; it does not store personnel in localStorage, impersonate user roles or claim transactions have succeeded. No UI is allowed to claim secure attendance/authentication operations before Phase 04+ C# integration. Tests and execution steps live in the separate planning ZIP.
-
-## UI routes and virtual host
-
-The bundled WebUI retains its existing Arabic text, RTL layout, and color system.
-Its 69 screen identifiers and nested folder names use unique ASCII PascalCase identifiers
-(such as `Dashboard`, `InternalTransfer`, and `DismissedPersonnelArchive`).
-All inline script blocks, inline event handlers, and inline styles were moved to local JS/CSS; stale links to external prompt archives were removed from the runtime screen manifest.
-The canonical offline virtual host is `https://manger.adwas.example/`, declared in
-`src/AlTamam.Contracts/Bridge/LocalWebUiOrigin.cs` and `action-manifest.json`.
-The `.example` suffix is reserved; use `CoreWebView2HostResourceAccessKind.Deny`
-when the future WPF/WebView2 host maps this origin to `src/AlTamam.WebUI`.
-**The current repository contains no Windows executable host or functional C# UI bridge yet.**
+SQLCipher validates the supplied key against real encrypted pages before database setting changes. Legacy schema hardening creates a verified encrypted SQLite online recovery snapshot and records checksummed migration components; historical records and V001 SQL are retained.
