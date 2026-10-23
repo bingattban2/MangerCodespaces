@@ -181,6 +181,30 @@ public sealed class WebView2BridgeDispatcher(DesktopRuntime runtime)
                     response=(await runtime.Movement.GetAsync(request.SessionNonce,movementKey.MovementId,cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
                 case "GetAvailableArchivePeriods":
                     Payload<EmptyPayload>(request);response=(await runtime.Monthly.PeriodsAsync(request.SessionNonce,cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "GetExportablePeriods":
+                    Payload<EmptyPayload>(request);response=(await runtime.Monthly.PeriodsAsync(request.SessionNonce,cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "PreviewMonthlyExport":
+                    response=(await runtime.Exports.PreviewAsync(request.SessionNonce,Payload<ExportQuery>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "ExportMonthlyWorkbookSet": case "ExportPersonLifetimeExcel":
+                    var export=Payload<CommitExport>(request);
+                    if((request.Action=="ExportMonthlyWorkbookSet")!=(export.Query.Kind=="monthly")){response=Fail(id,BridgeErrorCodes.ValidationError,"نوع التصدير لا يطابق العملية.");break;}
+                    response=(await runtime.Exports.StartAsync(request.SessionNonce,id,export,cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "GetExportProgress": case "CancelExport":
+                    response=(await runtime.Exports.StatusAsync(request.SessionNonce,Payload<ExportJobQuery>(request),request.Action=="CancelExport",cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "BuildPersonLifetimeReport":
+                    response=(await runtime.Reporting.PersonAsync(request.SessionNonce,Payload<ReportQuery>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "QueryPersonAttendanceTotals":
+                    response=(await runtime.Reporting.TotalsAsync(request.SessionNonce,Payload<ReportQuery>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "QueryPersonAttendanceTimeline":
+                    response=(await runtime.Reporting.AttendanceAsync(request.SessionNonce,Payload<ReportQuery>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "QueryPersonOperationsTimeline":
+                    response=(await runtime.Reporting.OperationsAsync(request.SessionNonce,Payload<ReportQuery>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "QueryForceReport":
+                    response=(await runtime.Reporting.ForceAsync(request.SessionNonce,Payload<ReportQuery>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
+                case "QueryPersonMovements":
+                    var reportMovement=Payload<ReportQuery>(request);
+                    if(string.IsNullOrWhiteSpace(reportMovement.PersonId)){response=Fail(id,BridgeErrorCodes.ValidationError,"اختر الفرد أولاً.");break;}
+                    response=(await runtime.Movement.QueryAsync(request.SessionNonce,new MovementArchiveQuery(PersonId:reportMovement.PersonId,FromDate:reportMovement.FromDate,ToDate:reportMovement.ToDate,SiteId:reportMovement.SiteId,Offset:reportMovement.Offset,Limit:reportMovement.Limit),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
                 case "QueryMonthlyGrid":
                     response=(await runtime.Monthly.QueryAsync(request.SessionNonce,Payload<MonthlyQuery>(request),cancellationToken).ConfigureAwait(false)).ToBridgeResponse(id);break;
                 case "GetMonthlyCellDetails":
