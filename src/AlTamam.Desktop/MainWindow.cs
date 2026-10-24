@@ -1,4 +1,5 @@
 using System.IO;
+using System.ComponentModel;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
@@ -15,7 +16,8 @@ public sealed class MainWindow : Window
     private readonly WebView2 _browser=new();
     private readonly WebView2BridgeDispatcher _dispatcher;
     private readonly CancellationTokenSource _lifetime=new();
-    private bool _closed;
+    private bool _closed, _closing, _allowClose;
+    private readonly HashSet<Task> _pendingRequests = new();
     public Task Initialization {get;private set;}=Task.CompletedTask;
     public MainWindow(DesktopRuntime runtime)
     {
@@ -24,6 +26,7 @@ public sealed class MainWindow : Window
         WindowStartupLocation=WindowStartupLocation.CenterScreen;Background=new SolidColorBrush(Color.FromRgb(245,247,250));
         Content=_browser;
         Loaded+=(_,_)=>Initialization=InitializeAsync();
+        Closing+=OnClosing;
         Closed+=(_,_)=>{_closed=true;_lifetime.Cancel();_browser.Dispose();_lifetime.Dispose();};
     }
     private async Task InitializeAsync()
@@ -52,12 +55,18 @@ public sealed class MainWindow : Window
             };
             core.WebMessageReceived+=async(_,e)=>
             {
-                if(_closed)return;
+                if(_closed||_closing)return;
                 try
                 {
                     var source=e.Source;var json=e.WebMessageAsJson;var token=_lifetime.Token;
-                    var response=await Task.Run(()=>_dispatcher.DispatchAsync(source,json,token),token);
-                    if(!_closed)core.PostWebMessageAsJson(JsonSerializer.Serialize(response,WebView2BridgeDispatcher.JsonOptions));
+                    var request=Task.Run(()=>_dispatcher.DispatchAsync(source,json,token),token);
+                    _pendingRequests.Add(request);
+                    try
+                    {
+                        var response=await request;
+                        if(!_closed&&!_closing)core.PostWebMessageAsJson(JsonSerializer.Serialize(response,WebView2BridgeDispatcher.JsonOptions));
+                    }
+                    finally { _pendingRequests.Remove(request); }
                 }
                 catch(OperationCanceledException){}
                 catch(Exception){if(!_closed)ShowFailure("تعذر استقبال نتيجة الطلب بأمان.");}
@@ -67,6 +76,22 @@ public sealed class MainWindow : Window
             core.Navigate(LocalWebUiOrigin.BaseUrl+"index.html");
         }
         catch(Exception){ShowFailure("تعذر تشغيل واجهة Windows. تحقق من توفر مكوّن Microsoft Edge WebView2 Runtime وملفات واجهة البرنامج المحلية.");throw;}
+    }
+    private async void OnClosing(object? sender, CancelEventArgs e)
+    {
+        if(_allowClose)return;
+        e.Cancel=true;
+        if(_closing)return;
+        _closing=true;
+        _lifetime.Cancel();
+        _browser.IsEnabled=false;
+        try { await Task.WhenAll(_pendingRequests.ToArray()); }
+        catch(OperationCanceledException) { }
+        finally
+        {
+            // Defer the second Close until the current Closing event has returned.
+            _ = Dispatcher.BeginInvoke(new Action(()=>{_allowClose=true;Close();}));
+        }
     }
     private void ShowFailure(string message)
     {
