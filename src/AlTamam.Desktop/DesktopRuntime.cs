@@ -6,6 +6,7 @@ using AlTamam.Application.Identity;
 using AlTamam.Application.Registry;
 using AlTamam.Application.Movement;
 using AlTamam.Application.Monthly;
+using AlTamam.Application.Reporting;
 using AlTamam.Domain.Abstractions;
 using AlTamam.Infrastructure.Persistence;
 using AlTamam.Infrastructure.Security;
@@ -25,6 +26,8 @@ public sealed class DesktopRuntime : IDisposable
     public DashboardService Dashboard {get;}
     public MovementService Movement {get;}
     public MonthlyGridService Monthly {get;}
+    public ReportingService Reporting {get;}
+    public Export.DesktopExportService Exports {get;}
     private readonly EightPmAutoAttendanceScheduler _scheduler;
     private readonly object _lifecycle = new();
     private bool _disposed;
@@ -37,7 +40,8 @@ public sealed class DesktopRuntime : IDisposable
         Attendance=new AttendanceService(attendance,attendance);Dashboard=new DashboardService(attendance,attendance);
         _scheduler=new EightPmAutoAttendanceScheduler(attendance);_scheduler.Start();
         var registry=new SqliteRegistryStore(database,clock);
-        Movement=new MovementService(registry);Monthly=new MonthlyGridService(registry);
+        Movement=new MovementService(registry);Monthly=new MonthlyGridService(registry);Reporting=new ReportingService(registry);
+        Exports=new Export.DesktopExportService(registry,new AlTamam.Infrastructure.Excel.SafeXlsxWriter(),Authentication);
         Roster=new PersonRosterService(registry);Configuration=new ConfigurationService(registry);
         Identity=new PersonIdentityService(new SqlitePersonIdentityStore(database,clock),clock);
     }
@@ -62,7 +66,7 @@ public sealed class DesktopRuntime : IDisposable
         {
             if (_disposed) return;
             _disposed = true;
-            try { _scheduler.Dispose(); }
+            try { Exports.Dispose(); _scheduler.Dispose(); }
             finally { Database.Dispose(); }
         }
     }

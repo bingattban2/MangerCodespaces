@@ -7,7 +7,7 @@ public sealed record ReportIdentity(string Name, string ServiceNumberA, string F
 public sealed record ReportStatusDays(string StatusId, string Caption, string Symbol, long Days);
 public sealed record PersonReportSummary(string PersonId, string Name, string ServiceNumberA, string EnrollmentDate,
     string FromDate, string ToDate, string AsOfUtc, long ApprovedDays, long InternalTransfers,
-    IReadOnlyList<ReportStatusDays> StatusDays);
+    IReadOnlyList<ReportStatusDays> StatusDays, string HistoryQueryToken);
 public sealed record ReportAttendance(long RecordId, string Date, string PersonName, string ServiceNumberA,
     string SiteId, string SiteName, string StatusId, string StatusName, string Symbol, string Source,
     long Revision, string CommittedAtUtc);
@@ -17,4 +17,4 @@ public sealed record PersonLifetimeReport(PersonReportSummary Summary, ReportPag
 public sealed record ForceReportRow(string PersonId, string Name, string ServiceNumberA, long ApprovedDays,
     long InternalTransfers, IReadOnlyList<ReportStatusDays> StatusDays);
 public sealed record ForceReportPage(string FromDate, string ToDate, ReportPage<ForceReportRow> Rows,
-    IReadOnlyList<ReportStatusDays> StatusTotals, long ApprovedDays, long InternalTransfers);
+    IReadOnlyList<ReportStatusDays> StatusTotals, long ApprovedDays, long InternalTransfers, string HistoryQueryToken);

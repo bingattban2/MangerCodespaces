@@ -11,6 +11,11 @@ namespace AlTamam.Infrastructure.Persistence;
 
 public sealed partial class SqliteRegistryStore : IReportingStore
 {
+    private async Task<string> ReportTokenAsync(SqliteConnection c, SqliteTransaction t, ReportQuery query)
+    {
+        var last = Convert.ToString(await ScalarAsync(c, t, "SELECT EventHash FROM AuditEvents ORDER BY rowid DESC LIMIT 1").ConfigureAwait(false)) ?? "";
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { Last = last, Day, Query = query with { Offset = 0, Limit = 50 } }))));
+    }
     private ReportQuery ValidateReport(ReportQuery query, bool person)
     {
         Require(query.Offset >= 0 && query.Limit is >= 1 and <= 100 && query.Search.Length <= 100 &&
@@ -40,7 +45,7 @@ public sealed partial class SqliteRegistryStore : IReportingStore
             " GROUP BY StatusId,StatusNameSnapshot,StatusSymbolSnapshot ORDER BY StatusId,StatusNameSnapshot,StatusSymbolSnapshot", ReportStatus, p).ConfigureAwait(false);
         var moves = Convert.ToInt64(await ScalarAsync(c, t, "SELECT COUNT(*) FROM PersonnelMovements" + ReportMovementFilter, p).ConfigureAwait(false));
         var identity = identities[0];
-        return new(q.PersonId!, identity.Name, identity.Number, identity.Entry, q.FromDate!, q.ToDate!, Now, statuses.Sum(s => s.Days), moves, statuses);
+        return new(q.PersonId!, identity.Name, identity.Number, identity.Entry, q.FromDate!, q.ToDate!, Now, statuses.Sum(s => s.Days), moves, statuses, await ReportTokenAsync(c, t, q).ConfigureAwait(false));
     }
     public Task<ServiceResult<PersonReportSummary>> PersonTotalsAsync(string nonce, ReportQuery query, CancellationToken token = default) => ReadAsync(nonce, async (c, actor) =>
     {
@@ -118,6 +123,7 @@ public sealed partial class SqliteRegistryStore : IReportingStore
         var movementCounts = await QueryAsync(c, t, "SELECT PersonId,COUNT(*)" + moves + selected + " GROUP BY PersonId", r => (Id: r.GetString(0), Count: r.GetInt64(1)), batch).ConfigureAwait(false);
         var byStatus = statuses.ToLookup(s => s.Id); var byMovement = movementCounts.ToDictionary(m => m.Id, m => m.Count);
         var rows = keys.Select(k => { token.ThrowIfCancellationRequested(); var days = byStatus[k.Id].Select(s => s.Status).ToArray(); return new ForceReportRow(k.Id, k.Name, k.Number, days.Sum(s => s.Days), byMovement.GetValueOrDefault(k.Id), days); }).ToArray();
-        t.Commit(); return new ForceReportPage(q.FromDate!, q.ToDate!, new(rows, total, q.Offset), totals, totals.Sum(s => s.Days), transferTotal);
+        var historyToken = await ReportTokenAsync(c, t, q).ConfigureAwait(false);
+        t.Commit(); return new ForceReportPage(q.FromDate!, q.ToDate!, new(rows, total, q.Offset), totals, totals.Sum(s => s.Days), transferTotal, historyToken);
     }, token);
 }

@@ -10,7 +10,11 @@ Registry screens support adding personnel, effective-dated identity updates, sof
 
 Current-day attendance supports authenticated single and atomic bulk confirmation, stale-preview rejection, immutable revision evidence, real dashboard counters, unprepared filters and user-owned drafts. The existing attendance and dashboard pages use persisted SQLCipher data.
 
-Movements, reports, Excel workflows, scheduled operations and backup/restore screens are not yet complete. Installer and Portable distribution remain gated on complete functionality and real Windows acceptance.
+Internal/external transfers and separation preserve historical snapshots and half-open assignments. Transfer-day attendance is excluded; linked accounts are revoked for external transfers and separation. The monthly grid uses bounded rows, frozen identity columns and historical cell details. The daily background worker performs current-day 20:00 processing and startup catch-up without rewriting previous days.
+
+Person and force reports reconcile approved attendance days separately from internal transfers. Excel exports use historical snapshots, explicit text cells for user values, native file selection, cancellable background writing and staged file publication. All-sites monthly export creates a ZIP containing the overall workbook and one workbook per site. A changed report requires a new preview before export.
+
+Excel import, custom columns, audit administration, settings and backup/restore workflows are not yet complete. Installer and Portable distribution remain gated on complete functionality and real Windows acceptance.
 
 ## Build and run
 

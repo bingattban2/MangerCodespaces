@@ -2389,6 +2389,30 @@
           "payload"
         ]
       }
+    },
+    {
+      "action": "QueryForceReport",
+      "owningService": "ReportingService",
+      "allowedRoles": [
+        "GeneralAdministration",
+        "OrdinaryAdministration",
+        "Supervisor"
+      ],
+      "isMutating": false,
+      "idempotentByRequestId": false,
+      "errorCodes": [
+        "MissingData"
+      ],
+      "requestSchema": {
+        "type": "object",
+        "required": [
+          "requestId",
+          "protocolVersion",
+          "action",
+          "sessionNonce",
+          "payload"
+        ]
+      }
     }
   ]
 }

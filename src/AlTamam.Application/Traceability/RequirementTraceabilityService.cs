@@ -103,7 +103,7 @@ public sealed class RequirementTraceabilityService
         "GetMovementDetails", "PreviewSeparation", "CommitSeparation",
         "QuerySeparationArchive", "GetSeparationDetails",
         // ReportingService (6)
-        "QueryPersonAttendanceTimeline", "QueryPersonAttendanceTotals", "BuildPersonLifetimeReport",
+        "QueryPersonAttendanceTimeline", "QueryPersonAttendanceTotals", "BuildPersonLifetimeReport", "QueryForceReport",
         "QueryPersonOperationsTimeline", "QueryPersonMovements", "ExportPersonLifetimeExcel",
         // ConfigurationService (12)
         "QueryAttendanceStatuses", "CreateAttendanceStatus", "UpdateAttendanceStatus",
@@ -524,7 +524,7 @@ public sealed class RequirementTraceabilityService
             OwningServices: new[] { "ReportingService" },
             BridgeActions: new[]
             {
-                "QueryPersonAttendanceTimeline", "QueryPersonAttendanceTotals", "BuildPersonLifetimeReport",
+                "QueryPersonAttendanceTimeline", "QueryPersonAttendanceTotals", "BuildPersonLifetimeReport", "QueryForceReport",
                 "QueryPersonOperationsTimeline", "QueryPersonMovements", "ExportPersonLifetimeExcel"
             },
             ScreenRouteKeys: new[]
